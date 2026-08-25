@@ -40,6 +40,7 @@ export interface ProductSummary {
   swatchColor?: string;
   modelTitle?: string;
   groupId?: string;
+  isPublished?: boolean;
 }
 
 export interface CreateProductInput {
@@ -298,6 +299,8 @@ export async function createMojoProduct(
   images: ImageUploadItem[] = []
 ): Promise<{
   success: boolean;
+  publicationSuccess?: boolean;
+  publicationWarning?: string;
   product?: ProductSummary;
   error?: string;
   details?: Record<string, unknown>;
@@ -488,6 +491,8 @@ export async function createMojoProduct(
 
   return {
     success: true,
+    publicationSuccess: isPublished,
+    publicationWarning: !isPublished && status === 'ACTIVE' ? 'Ürün oluşturuldu fakat Online Store kanalında yayınlanamadı.' : undefined,
     product: {
       id: createdProduct.id,
       numericId: createdProduct.id.split('/').pop() || '',
@@ -507,6 +512,7 @@ export async function createMojoProduct(
       swatchColor: colorHex,
       modelTitle,
       groupId,
+      isPublished,
     },
   };
 }
