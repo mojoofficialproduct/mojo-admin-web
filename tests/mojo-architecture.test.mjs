@@ -16,6 +16,7 @@ import {
 
 import { categorizeError, normalizeGraphQLError } from '../lib/shopify/errors.ts';
 import { buildInventoryQuantity, validateProductSetInventoryInput } from '../lib/shopify/inventory.ts';
+import { getShopifyConfig, clearShopifyTokenCache, getShopifyTokenCacheStatus, getShopifyAccessToken } from '../lib/shopify/client.ts';
 
 test('isCustomMojoTemplate detects mojo-dynamic and theme templates', () => {
   assert.equal(isCustomMojoTemplate('mojo-dynamic'), true);
@@ -95,4 +96,81 @@ test('Error normalizer sanitizes raw GraphQL and schema errors', () => {
   assert.equal(clean.includes('Variable $input'), false);
   assert.equal(clean.includes('availableQuantity'), false);
   assert.equal(categorizeError('SKU already taken'), 'SKU kodu zaten kullanımda veya çakışıyor.');
+});
+
+test('Shopify Client Credentials configuration and cache management', async () => {
+  // Test getShopifyConfig
+  process.env.SHOPIFY_STORE_DOMAIN = 'test-store.myshopify.com';
+  process.env.SHOPIFY_CLIENT_ID = 'test_client_id_123';
+  process.env.SHOPIFY_CLIENT_SECRET = 'test_client_secret_456';
+  process.env.SHOPIFY_API_VERSION = '2026-07';
+
+  const config = getShopifyConfig();
+  assert.equal(config.domain, 'test-store.myshopify.com');
+  assert.equal(config.clientId, 'test_client_id_123');
+  assert.equal(config.clientSecret, 'test_client_secret_456');
+  assert.equal(config.apiVersion, '2026-07');
+  assert.equal(config.isConfigured, true);
+
+  // Test cache clearing and initial status
+  clearShopifyTokenCache();
+  const status = getShopifyTokenCacheStatus();
+  assert.equal(status.hasCachedToken, false);
+  assert.equal(status.isExpired, true);
+});
+
+test('Shopify Client Credentials Grant token retrieval and caching with mock fetch', async () => {
+  clearShopifyTokenCache();
+
+  process.env.SHOPIFY_STORE_DOMAIN = 'test-mock-store.myshopify.com';
+  process.env.SHOPIFY_CLIENT_ID = 'mock_client_id';
+  process.env.SHOPIFY_CLIENT_SECRET = 'mock_client_secret';
+
+  let fetchCallCount = 0;
+  let receivedBody = '';
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes('/admin/oauth/access_token')) {
+      fetchCallCount++;
+      receivedBody = String(init?.body || '');
+      return {
+        ok: true,
+        json: async () => ({
+          access_token: 'shpat_mock_credentials_token_9999',
+          scope: 'write_products,write_inventory,write_files',
+          expires_in: 86400,
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  };
+
+  try {
+    // 1. Initial token retrieval
+    const token1 = await getShopifyAccessToken();
+    assert.equal(token1, 'shpat_mock_credentials_token_9999');
+    assert.equal(fetchCallCount, 1);
+    assert.ok(receivedBody.includes('grant_type=client_credentials'));
+    assert.ok(receivedBody.includes('client_id=mock_client_id'));
+    assert.ok(receivedBody.includes('client_secret=mock_client_secret'));
+
+    // 2. Second retrieval should hit in-memory cache without extra HTTP call
+    const token2 = await getShopifyAccessToken();
+    assert.equal(token2, 'shpat_mock_credentials_token_9999');
+    assert.equal(fetchCallCount, 1); // Cache hit, no second fetch
+
+    // 3. Cache status inspection
+    const status = getShopifyTokenCacheStatus();
+    assert.equal(status.hasCachedToken, true);
+    assert.equal(status.isExpired, false);
+
+    // 4. Forced refresh should invalidate cache and fetch fresh token
+    const token3 = await getShopifyAccessToken(true);
+    assert.equal(token3, 'shpat_mock_credentials_token_9999');
+    assert.equal(fetchCallCount, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+    clearShopifyTokenCache();
+  }
 });
