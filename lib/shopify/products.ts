@@ -28,6 +28,11 @@ export interface ProductSummary {
   status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
   onlineStoreUrl?: string;
   templateSuffix?: string;
+  category?: {
+    id: string;
+    name: string;
+    fullName?: string;
+  };
   updatedAt: string;
   totalInventory: number;
   imageUrl?: string;
@@ -55,6 +60,7 @@ export interface CreateProductInput {
   descriptionHtml?: string;
   status?: 'ACTIVE' | 'DRAFT';
   locationId?: string;
+  categoryId?: string;
 }
 
 export function formatPriceTRY(amount: string | number, currencyCode = 'TRY'): string {
@@ -118,6 +124,7 @@ export async function fetchProductsList(options: {
           status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
           onlineStoreUrl?: string;
           templateSuffix?: string;
+          category?: { id: string; name: string; fullName?: string };
           updatedAt: string;
           totalInventory?: number;
           featuredImage?: { url: string; altText?: string };
@@ -169,6 +176,7 @@ export async function fetchProductsList(options: {
       status: node.status,
       onlineStoreUrl: node.onlineStoreUrl,
       templateSuffix: node.templateSuffix,
+      category: node.category,
       updatedAt: node.updatedAt,
       totalInventory: node.totalInventory ?? 0,
       imageUrl: node.featuredImage?.url,
@@ -372,6 +380,10 @@ export async function createMojoProduct(
     productInput.descriptionHtml = input.descriptionHtml.trim();
   }
 
+  if (input.categoryId?.trim()) {
+    productInput.category = input.categoryId.trim();
+  }
+
   const createRes = await executeShopifyGraphQL<{
     productCreate: {
       product?: {
@@ -380,6 +392,7 @@ export async function createMojoProduct(
         handle: string;
         status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
         templateSuffix?: string;
+        category?: { id: string; name: string; fullName?: string };
         variants?: {
           nodes: Array<{
             id: string;
@@ -521,6 +534,7 @@ export async function createMojoProduct(
       groupId,
       isPublished,
       publishedChannelsCount: publicationDetails?.actualCount ?? 0,
+      category: createdProduct.category,
     },
   };
 }
@@ -566,6 +580,7 @@ export async function addSiblingColorProduct(
       sku: options.sku,
       descriptionHtml: sourceProduct.descriptionHtml,
       status: 'ACTIVE',
+      categoryId: sourceProduct.category?.id,
     },
     options.images || []
   );

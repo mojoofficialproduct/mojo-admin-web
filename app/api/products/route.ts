@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
     let descriptionHtml = '';
     let status: 'ACTIVE' | 'DRAFT' = 'ACTIVE';
     let locationId = '';
+    let categoryId = '';
     const imageItems: ImageUploadItem[] = [];
 
     if (contentType.includes('multipart/form-data')) {
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
       descriptionHtml = String(formData.get('descriptionHtml') || '').trim();
       status = (formData.get('status') as 'ACTIVE' | 'DRAFT') || 'ACTIVE';
       locationId = String(formData.get('locationId') || '').trim();
+      categoryId = String(formData.get('categoryId') || '').trim();
 
       const imageFiles = formData.getAll('images') as File[];
       for (const file of imageFiles) {
@@ -79,6 +81,7 @@ export async function POST(request: NextRequest) {
       descriptionHtml = String(body.descriptionHtml || '').trim();
       status = body.status || 'ACTIVE';
       locationId = String(body.locationId || '').trim();
+      categoryId = String(body.categoryId || '').trim();
     }
 
     if (!modelTitle) {
@@ -100,6 +103,7 @@ export async function POST(request: NextRequest) {
         descriptionHtml,
         status,
         locationId,
+        categoryId,
       },
       imageItems
     );

@@ -174,3 +174,14 @@ test('Shopify Client Credentials Grant token retrieval and caching with mock fet
     clearShopifyTokenCache();
   }
 });
+
+test('MOJO taxonomy categories and default bag category configuration', async () => {
+  const { MOJO_TAXONOMY_CATEGORIES, getDefaultMojoCategory } = await import('../lib/shopify/categories.ts');
+  assert.ok(Array.isArray(MOJO_TAXONOMY_CATEGORIES));
+  assert.ok(MOJO_TAXONOMY_CATEGORIES.length >= 4);
+
+  const defaultCat = getDefaultMojoCategory();
+  assert.ok(defaultCat.id.startsWith('gid://shopify/TaxonomyCategory/'));
+  assert.ok(defaultCat.name.toLowerCase().includes('çanta'));
+});
+

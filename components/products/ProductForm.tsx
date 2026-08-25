@@ -8,12 +8,15 @@ import { useToast } from '@/components/ui/Toast';
 import { CheckCircle2, ArrowRight, Plus, Eye, Loader2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
+import { MOJO_TAXONOMY_CATEGORIES, getDefaultMojoCategory } from '@/lib/shopify/categories';
+
 export function ProductForm() {
   const router = useRouter();
   const { success, error, warning } = useToast();
 
   // Form State
   const [modelTitle, setModelTitle] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState(getDefaultMojoCategory().id);
   const [selectedColor, setSelectedColor] = useState('Siyah');
   const [customColorHex, setCustomColorHex] = useState('');
   const [price, setPrice] = useState('');
@@ -46,9 +49,12 @@ export function ProductForm() {
       error('Eksik Alan', 'Lütfen bir ürün adı (model) girin.');
       return;
     }
-
-    if (!price.trim() || isNaN(parseFloat(price.replace(',', '.')))) {
-      error('Eksik Alan', 'Lütfen geçerli bir ürün fiyatı girin.');
+    if (!selectedColor.trim()) {
+      error('Eksik Alan', 'Lütfen bir renk seçin.');
+      return;
+    }
+    if (!price.trim()) {
+      error('Eksik Alan', 'Lütfen ürün fiyatını girin.');
       return;
     }
 
@@ -57,7 +63,8 @@ export function ProductForm() {
 
       const formData = new FormData();
       formData.append('modelTitle', modelTitle.trim());
-      formData.append('colorName', selectedColor);
+      formData.append('categoryId', selectedCategoryId);
+      formData.append('colorName', selectedColor.trim());
       if (customColorHex) {
         formData.append('customColorHex', customColorHex);
       }
@@ -110,6 +117,7 @@ export function ProductForm() {
 
   const handleResetForm = () => {
     setModelTitle('');
+    setSelectedCategoryId(getDefaultMojoCategory().id);
     setSelectedColor('Siyah');
     setCustomColorHex('');
     setPrice('');
@@ -260,6 +268,28 @@ export function ProductForm() {
                   Shopify Başlığı: <strong>{previewTitle}</strong>
                 </span>
               </div>
+            </div>
+
+            {/* Category (Shopify Standard Taxonomy) */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label className="label" style={{ marginBottom: 0 }}>
+                  Kategori <span style={{ color: '#F61F1F' }}>*</span>
+                </label>
+                <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>Shopify Standart Taksonomisi</span>
+              </div>
+              <select
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
+                className="input-field"
+                style={{ appearance: 'auto', backgroundColor: '#FFFFFF', cursor: 'pointer' }}
+              >
+                {MOJO_TAXONOMY_CATEGORIES.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Description */}

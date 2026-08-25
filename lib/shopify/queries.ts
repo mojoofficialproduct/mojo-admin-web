@@ -18,6 +18,11 @@ export const PRODUCTS_QUERY = /* GraphQL */ `
           vendor
           productType
           templateSuffix
+          category {
+            id
+            name
+            fullName
+          }
           updatedAt
           totalInventory
           featuredImage {
@@ -84,6 +89,11 @@ export const GET_PRODUCT_QUERY = /* GraphQL */ `
       status
       onlineStoreUrl
       templateSuffix
+      category {
+        id
+        name
+        fullName
+      }
       updatedAt
       totalInventory
       featuredImage {
@@ -278,6 +288,11 @@ export const PRODUCT_CREATE_MUTATION = /* GraphQL */ `
         handle
         status
         templateSuffix
+        category {
+          id
+          name
+          fullName
+        }
         variants(first: 5) {
           nodes {
             id
@@ -311,6 +326,11 @@ export const PRODUCT_UPDATE_MUTATION = /* GraphQL */ `
         status
         templateSuffix
         updatedAt
+        category {
+          id
+          name
+          fullName
+        }
       }
       userErrors {
         field

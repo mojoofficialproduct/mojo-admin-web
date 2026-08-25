@@ -287,6 +287,20 @@ export default function ProductDetailPage({
               <span style={{ fontSize: 11, color: '#9CA3AF', fontFamily: 'monospace' }}>
                 Şablon: {product.templateSuffix || 'mojo-dynamic'}
               </span>
+              {product.category?.name && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#4B5563',
+                    backgroundColor: '#F3F4F6',
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                  }}
+                >
+                  Kategori: {product.category.name}
+                </span>
+              )}
             </div>
 
             <h1 className="heading-lg" style={{ fontSize: 22, marginTop: 2 }}>
