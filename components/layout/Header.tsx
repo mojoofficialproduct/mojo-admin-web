@@ -30,13 +30,13 @@ export function Header() {
   return (
     <header className="topbar">
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', height: 26 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
           <Image
             src="/mojo-logo.webp"
             alt="MOJO"
-            width={95}
+            width={52}
             height={26}
-            style={{ objectFit: 'contain', width: 'auto', height: 24 }}
+            style={{ objectFit: 'contain', width: 48, height: 'auto' }}
             priority
           />
         </div>

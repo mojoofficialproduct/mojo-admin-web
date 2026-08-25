@@ -36,28 +36,29 @@ export function Sidebar() {
       {/* Brand Header */}
       <div
         style={{
-          padding: '24px 24px 20px 24px',
+          padding: '28px 24px 22px 24px',
           borderBottom: '1px solid var(--border-subtle)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 6,
+          alignItems: 'flex-start',
+          gap: 10,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', height: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
           <Image
             src="/mojo-logo.webp"
             alt="MOJO"
-            width={115}
-            height={32}
-            style={{ objectFit: 'contain', width: 'auto', height: 28 }}
+            width={85}
+            height={38}
+            style={{ objectFit: 'contain', width: 82, height: 'auto' }}
             priority
           />
         </div>
         <span
           style={{
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: '0.08em',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.09em',
             textTransform: 'uppercase',
             color: '#6B7280',
           }}

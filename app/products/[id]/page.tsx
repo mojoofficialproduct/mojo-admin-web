@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { formatPriceTRY } from '@/lib/shopify/products';
 import { getColorSwatch, parseMojoProductTitle } from '@/lib/shopify/mojo';
+import { MOJO_TAXONOMY_CATEGORIES, getDefaultMojoCategory } from '@/lib/shopify/categories';
+import { Edit3, Check, Save } from 'lucide-react';
 
 export default function ProductDetailPage({
   params,
@@ -35,6 +37,20 @@ export default function ProductDetailPage({
   const [product, setProduct] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Edit Mode State
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editCategory, setEditCategory] = useState(getDefaultMojoCategory().id);
+  const [editPrice, setEditPrice] = useState('');
+  const [editCompareAtPrice, setEditCompareAtPrice] = useState('');
+  const [editStock, setEditStock] = useState('0');
+  const [editSku, setEditSku] = useState('');
+  const [editBarcode, setEditBarcode] = useState('');
+  const [editTags, setEditTags] = useState('');
+  const [editStatus, setEditStatus] = useState<'ACTIVE' | 'DRAFT'>('ACTIVE');
 
   // New Sibling Color Modal State
   const [isColorModalOpen, setIsColorModalOpen] = useState(false);
@@ -54,9 +70,40 @@ export default function ProductDetailPage({
         throw new Error('Ürün yüklenemedi');
       }
       const data = await res.json();
-      setProduct(data.product);
-      if (data.product?.variants?.nodes?.[0]?.price) {
-        setColorPrice(data.product.variants.nodes[0].price);
+      const p = data.product;
+      setProduct(p);
+
+      const firstVar = p?.variants?.nodes?.[0];
+      if (firstVar?.price) {
+        setColorPrice(firstVar.price);
+        setEditPrice(firstVar.price);
+      }
+      if (firstVar?.compareAtPrice) {
+        setEditCompareAtPrice(firstVar.compareAtPrice);
+      }
+      if (firstVar?.sku) {
+        setEditSku(firstVar.sku);
+      }
+      if (firstVar?.barcode) {
+        setEditBarcode(firstVar.barcode);
+      }
+      if (p?.title) {
+        setEditTitle(p.title);
+      }
+      if (p?.descriptionHtml) {
+        setEditDescription(p.descriptionHtml.replace(/<[^>]*>?/gm, ''));
+      }
+      if (p?.category?.id) {
+        setEditCategory(p.category.id);
+      }
+      if (p?.totalInventory !== undefined) {
+        setEditStock(String(p.totalInventory));
+      }
+      if (p?.status) {
+        setEditStatus(p.status);
+      }
+      if (p?.tags) {
+        setEditTags(Array.isArray(p.tags) ? p.tags.join(', ') : String(p.tags));
       }
     } catch (err) {
       console.error('Product load error:', err);
@@ -69,6 +116,42 @@ export default function ProductDetailPage({
   useEffect(() => {
     loadProduct();
   }, [loadProduct]);
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setIsSavingEdit(true);
+      const res = await fetch(`/api/products/${resolvedParams.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          descriptionHtml: editDescription.trim() ? `<p>${editDescription.trim().replace(/\n/g, '<br/>')}</p>` : '',
+          categoryId: editCategory,
+          price: editPrice.trim().replace(',', '.'),
+          compareAtPrice: editCompareAtPrice.trim() ? editCompareAtPrice.trim().replace(',', '.') : undefined,
+          quantity: editStock.trim() || '0',
+          sku: editSku.trim(),
+          barcode: editBarcode.trim(),
+          tags: editTags.trim(),
+          status: editStatus,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Güncelleme başarısız');
+      }
+
+      success('Bilgiler Güncellendi', 'Ürün detayları Shopify üzerinde başarıyla güncellendi.');
+      setIsEditingInfo(false);
+      loadProduct();
+    } catch (err) {
+      error('Güncelleme Hatası', err instanceof Error ? err.message : 'İşlem başarısız');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!confirm(`"${product?.title}" ürününü Shopify'dan tamamen silmek istediğinize emin misiniz?`)) {
@@ -121,8 +204,9 @@ export default function ProductDetailPage({
         formData.append('sku', colorSku.trim());
       }
 
-      colorImages.forEach((img) => {
-        formData.append('images', img.file);
+      // Append binary files
+      colorImages.forEach((item) => {
+        formData.append('images', item.file);
       });
 
       const res = await fetch(`/api/products/${resolvedParams.id}/color`, {
@@ -229,6 +313,16 @@ export default function ProductDetailPage({
 
             <button
               type="button"
+              onClick={() => setIsEditingInfo(!isEditingInfo)}
+              className="btn btn-secondary btn-sm"
+              style={{ gap: 6, color: isEditingInfo ? '#000000' : '#4B5563', borderColor: isEditingInfo ? '#000000' : undefined }}
+            >
+              <Edit3 size={13} />
+              <span>{isEditingInfo ? 'Düzenlemeyi Kapat' : 'Bilgileri Düzenle'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleDelete}
               disabled={isDeleting}
               className="btn btn-danger btn-sm"
@@ -239,6 +333,141 @@ export default function ProductDetailPage({
             </button>
           </div>
         </div>
+
+        {/* Inline Edit Form (When Active) */}
+        {isEditingInfo && (
+          <form onSubmit={handleSaveEdit} className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 18, border: '2px solid #000000' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Edit3 size={18} color="#111827" />
+                <h2 className="heading-md" style={{ fontSize: 16 }}>Ürün Bilgilerini Düzenle</h2>
+              </div>
+              <span style={{ fontSize: 12, color: '#6B7280' }}>Değişiklikler anında Shopify&apos;a kaydedilir</span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16 }}>
+              <div>
+                <label className="label">Ürün Başlığı</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="input-field"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="label">Kategori</label>
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  className="input-field"
+                >
+                  {MOJO_TAXONOMY_CATEGORIES.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+              <div>
+                <label className="label">Satış Fiyatı (TRY)</label>
+                <input
+                  type="text"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                  className="input-field"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label">Karşılaştırma Fiyatı</label>
+                <input
+                  type="text"
+                  placeholder="Opsiyonel"
+                  value={editCompareAtPrice}
+                  onChange={(e) => setEditCompareAtPrice(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="label">Stok Adedi</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editStock}
+                  onChange={(e) => setEditStock(e.target.value)}
+                  className="input-field"
+                  required
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label className="label">SKU</label>
+                <input
+                  type="text"
+                  value={editSku}
+                  onChange={(e) => setEditSku(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="label">Barkod</label>
+                <input
+                  type="text"
+                  value={editBarcode}
+                  onChange={(e) => setEditBarcode(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Ürün Açıklaması</label>
+              <textarea
+                rows={3}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="input-field"
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
+              <button
+                type="button"
+                onClick={() => setIsEditingInfo(false)}
+                className="btn btn-secondary"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingEdit}
+                className="btn btn-primary"
+                style={{ gap: 6 }}
+              >
+                {isSavingEdit ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    <span>Kaydediliyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={15} />
+                    <span>Değişiklikleri Kaydet</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Product Overview Header */}
         <div

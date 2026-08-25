@@ -41,6 +41,16 @@ export async function POST(request: NextRequest) {
     let status: 'ACTIVE' | 'DRAFT' = 'ACTIVE';
     let locationId = '';
     let categoryId = '';
+    let barcode = '';
+    let vendor = 'MOJO';
+    let productType = '';
+    let tags = '';
+    let requiresShipping = true;
+    let weight = '';
+    let weightUnit = 'KILOGRAMS';
+    let handle = '';
+    let seoTitle = '';
+    let seoDescription = '';
     const imageItems: ImageUploadItem[] = [];
 
     if (contentType.includes('multipart/form-data')) {
@@ -52,10 +62,20 @@ export async function POST(request: NextRequest) {
       compareAtPrice = String(formData.get('compareAtPrice') || '').trim();
       quantity = String(formData.get('quantity') || '0').trim();
       sku = String(formData.get('sku') || '').trim();
+      barcode = String(formData.get('barcode') || '').trim();
       descriptionHtml = String(formData.get('descriptionHtml') || '').trim();
       status = (formData.get('status') as 'ACTIVE' | 'DRAFT') || 'ACTIVE';
       locationId = String(formData.get('locationId') || '').trim();
       categoryId = String(formData.get('categoryId') || '').trim();
+      vendor = String(formData.get('vendor') || 'MOJO').trim();
+      productType = String(formData.get('productType') || '').trim();
+      tags = String(formData.get('tags') || '').trim();
+      requiresShipping = formData.get('requiresShipping') !== 'false';
+      weight = String(formData.get('weight') || '').trim();
+      weightUnit = String(formData.get('weightUnit') || 'KILOGRAMS').trim();
+      handle = String(formData.get('handle') || '').trim();
+      seoTitle = String(formData.get('seoTitle') || '').trim();
+      seoDescription = String(formData.get('seoDescription') || '').trim();
 
       const imageFiles = formData.getAll('images') as File[];
       for (const file of imageFiles) {
@@ -78,10 +98,20 @@ export async function POST(request: NextRequest) {
       compareAtPrice = String(body.compareAtPrice || '').trim();
       quantity = body.quantity || '0';
       sku = String(body.sku || '').trim();
+      barcode = String(body.barcode || '').trim();
       descriptionHtml = String(body.descriptionHtml || '').trim();
-      status = body.status || 'ACTIVE';
+      status = body.status === 'DRAFT' ? 'DRAFT' : 'ACTIVE';
       locationId = String(body.locationId || '').trim();
       categoryId = String(body.categoryId || '').trim();
+      vendor = String(body.vendor || 'MOJO').trim();
+      productType = String(body.productType || '').trim();
+      tags = String(body.tags || '').trim();
+      requiresShipping = body.requiresShipping !== false;
+      weight = String(body.weight || '').trim();
+      weightUnit = String(body.weightUnit || 'KILOGRAMS').trim();
+      handle = String(body.handle || '').trim();
+      seoTitle = String(body.seoTitle || '').trim();
+      seoDescription = String(body.seoDescription || '').trim();
     }
 
     if (!modelTitle) {
@@ -100,10 +130,20 @@ export async function POST(request: NextRequest) {
         compareAtPrice,
         quantity,
         sku,
+        barcode,
         descriptionHtml,
         status,
         locationId,
         categoryId,
+        vendor,
+        productType,
+        tags,
+        requiresShipping,
+        weight,
+        weightUnit,
+        handle,
+        seoTitle,
+        seoDescription,
       },
       imageItems
     );

@@ -57,10 +57,36 @@ export interface CreateProductInput {
   compareAtPrice?: string;
   quantity: string | number;
   sku?: string;
+  barcode?: string;
   descriptionHtml?: string;
   status?: 'ACTIVE' | 'DRAFT';
   locationId?: string;
   categoryId?: string;
+  vendor?: string;
+  productType?: string;
+  tags?: string[] | string;
+  requiresShipping?: boolean;
+  weight?: number | string;
+  weightUnit?: string;
+  handle?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+}
+
+export interface UpdateProductInput {
+  title?: string;
+  descriptionHtml?: string;
+  categoryId?: string;
+  status?: 'ACTIVE' | 'DRAFT';
+  vendor?: string;
+  productType?: string;
+  tags?: string[] | string;
+  price?: string | number;
+  compareAtPrice?: string | number;
+  sku?: string;
+  barcode?: string;
+  quantity?: string | number;
+  locationId?: string;
 }
 
 export function formatPriceTRY(amount: string | number, currencyCode = 'TRY'): string {
@@ -370,7 +396,7 @@ export async function createMojoProduct(
   // 3. Create Product in Shopify
   const productInput: Record<string, unknown> = {
     title: fullTitle,
-    vendor: 'MOJO',
+    vendor: input.vendor?.trim() || 'MOJO',
     status,
     templateSuffix: 'mojo-dynamic',
     metafields,
@@ -382,6 +408,29 @@ export async function createMojoProduct(
 
   if (input.categoryId?.trim()) {
     productInput.category = input.categoryId.trim();
+  }
+
+  if (input.productType?.trim()) {
+    productInput.productType = input.productType.trim();
+  }
+
+  if (input.tags) {
+    if (Array.isArray(input.tags)) {
+      productInput.tags = input.tags.filter(Boolean);
+    } else if (typeof input.tags === 'string' && input.tags.trim()) {
+      productInput.tags = input.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    }
+  }
+
+  if (input.handle?.trim()) {
+    productInput.handle = input.handle.trim();
+  }
+
+  if (input.seoTitle?.trim() || input.seoDescription?.trim()) {
+    productInput.seo = {
+      title: input.seoTitle?.trim() || undefined,
+      description: input.seoDescription?.trim() || undefined,
+    };
   }
 
   const createRes = await executeShopifyGraphQL<{
@@ -421,7 +470,7 @@ export async function createMojoProduct(
   const variantId = defaultVariant?.id;
   const inventoryItemId = defaultVariant?.inventoryItem?.id;
 
-  // 4. Update Variant with Price & SKU
+  // 4. Update Variant with Price, CompareAt, SKU, Barcode
   if (variantId) {
     const cleanPrice = parseFloat(String(input.price).replace(',', '.')).toFixed(2);
     const variantUpdatePayload: Record<string, unknown> = {
@@ -429,10 +478,14 @@ export async function createMojoProduct(
       price: cleanPrice,
       inventoryItem: {
         tracked: true,
-        requiresShipping: true,
+        requiresShipping: input.requiresShipping !== false,
         sku,
       },
     };
+
+    if (input.barcode?.trim()) {
+      variantUpdatePayload.barcode = input.barcode.trim();
+    }
 
     if (input.compareAtPrice) {
       variantUpdatePayload.compareAtPrice = parseFloat(
@@ -635,4 +688,131 @@ export async function deleteProduct(productId: string): Promise<boolean> {
   }
 
   return true;
+}
+
+/**
+ * Update existing product details (Price, Stock, Description, Category, SKU, Barcode, etc.)
+ */
+export async function updateMojoProduct(
+  productId: string,
+  input: UpdateProductInput
+): Promise<{ success: boolean; error?: string }> {
+  const fullProductId = productId.startsWith('gid://') ? productId : `gid://shopify/Product/${productId}`;
+
+  // 1. Update Core Product attributes if provided
+  const productInput: Record<string, unknown> = { id: fullProductId };
+  let hasProductUpdates = false;
+
+  if (input.title?.trim()) {
+    productInput.title = input.title.trim();
+    hasProductUpdates = true;
+  }
+  if (input.descriptionHtml !== undefined) {
+    productInput.descriptionHtml = input.descriptionHtml.trim();
+    hasProductUpdates = true;
+  }
+  if (input.categoryId?.trim()) {
+    productInput.category = input.categoryId.trim();
+    hasProductUpdates = true;
+  }
+  if (input.status) {
+    productInput.status = input.status;
+    hasProductUpdates = true;
+  }
+  if (input.vendor?.trim()) {
+    productInput.vendor = input.vendor.trim();
+    hasProductUpdates = true;
+  }
+  if (input.productType !== undefined) {
+    productInput.productType = input.productType.trim();
+    hasProductUpdates = true;
+  }
+  if (input.tags !== undefined) {
+    if (Array.isArray(input.tags)) {
+      productInput.tags = input.tags;
+    } else if (typeof input.tags === 'string') {
+      productInput.tags = input.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    }
+    hasProductUpdates = true;
+  }
+
+  if (hasProductUpdates) {
+    const updateRes = await executeShopifyGraphQL<{
+      productUpdate: {
+        product?: { id: string };
+        userErrors?: Array<{ field: string[]; message: string }>;
+      };
+    }>(PRODUCT_UPDATE_MUTATION, {
+      variables: { product: productInput },
+      label: 'Ürün güncelleme',
+    });
+
+    const userErrors = updateRes?.productUpdate?.userErrors || [];
+    if (userErrors.length > 0) {
+      return { success: false, error: normalizeGraphQLError({ userErrors }, 'Ürün güncellenemedi.') };
+    }
+  }
+
+  // 2. Update Variant (Price, CompareAt, SKU, Barcode)
+  if (
+    input.price !== undefined ||
+    input.compareAtPrice !== undefined ||
+    input.sku !== undefined ||
+    input.barcode !== undefined
+  ) {
+    const currentProduct = await fetchProductById(productId);
+    const firstVariant = currentProduct?.variants?.nodes?.[0];
+    if (firstVariant?.id) {
+      const variantPayload: Record<string, unknown> = { id: firstVariant.id };
+      if (input.price !== undefined && String(input.price).trim()) {
+        variantPayload.price = parseFloat(String(input.price).replace(',', '.')).toFixed(2);
+      }
+      if (input.compareAtPrice !== undefined) {
+        if (String(input.compareAtPrice).trim()) {
+          variantPayload.compareAtPrice = parseFloat(String(input.compareAtPrice).replace(',', '.')).toFixed(2);
+        } else {
+          variantPayload.compareAtPrice = null;
+        }
+      }
+      if (input.barcode !== undefined) {
+        variantPayload.barcode = input.barcode.trim() || null;
+      }
+      if (input.sku !== undefined) {
+        variantPayload.inventoryItem = {
+          tracked: true,
+          sku: input.sku.trim(),
+        };
+      }
+
+      await executeShopifyGraphQL(PRODUCT_VARIANTS_BULK_UPDATE_MUTATION, {
+        variables: {
+          productId: fullProductId,
+          variants: [variantPayload],
+        },
+        label: 'Varyant güncelleme',
+      });
+    }
+  }
+
+  // 3. Update Inventory if quantity provided
+  if (input.quantity !== undefined && String(input.quantity).trim() !== '') {
+    const qty = parseInt(String(input.quantity), 10);
+    if (!isNaN(qty)) {
+      const currentProduct = await fetchProductById(productId);
+      const inventoryItemId = currentProduct?.variants?.nodes?.[0]?.inventoryItem?.id;
+      if (inventoryItemId) {
+        let targetLocationId = input.locationId;
+        if (!targetLocationId) {
+          const locations = await fetchLocations();
+          const primary = locations.find((l) => l.isPrimary && l.isActive) || locations.find((l) => l.isActive);
+          targetLocationId = primary?.id;
+        }
+        if (targetLocationId) {
+          await setInventoryQuantity(inventoryItemId, targetLocationId, qty);
+        }
+      }
+    }
+  }
+
+  return { success: true };
 }
