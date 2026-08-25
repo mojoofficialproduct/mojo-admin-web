@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/navigation';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Home, Package, PlusCircle } from 'lucide-react';
 
@@ -40,22 +40,18 @@ export function Sidebar() {
           borderBottom: '1px solid var(--border-subtle)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 4,
+          gap: 6,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span
-            style={{
-              fontSize: 20,
-              fontWeight: 800,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: '#000000',
-            }}
-          >
-            MOJO
-          </span>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#F61F1F' }} />
+        <div style={{ display: 'flex', alignItems: 'center', height: 32 }}>
+          <Image
+            src="/mojo-logo.webp"
+            alt="MOJO"
+            width={115}
+            height={32}
+            style={{ objectFit: 'contain', width: 'auto', height: 28 }}
+            priority
+          />
         </div>
         <span
           style={{

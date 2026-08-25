@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, Suspense } from 'react';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Lock, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
@@ -119,23 +120,17 @@ export default function LoginPage() {
           boxShadow: 'var(--shadow-lg)',
         }}
       >
-        {/* Header Branding */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 26,
-              fontWeight: 800,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: '#000000',
-              marginBottom: 8,
-            }}
-          >
-            <span>MOJO</span>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#F61F1F' }} />
+        {/* Header Branding with MOJO Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+            <Image
+              src="/mojo-logo.webp"
+              alt="MOJO"
+              width={130}
+              height={36}
+              style={{ objectFit: 'contain', width: 'auto', height: 34 }}
+              priority
+            />
           </div>
 
           <h1 style={{ fontSize: 18, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>

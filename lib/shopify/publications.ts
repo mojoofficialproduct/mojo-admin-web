@@ -4,41 +4,42 @@ import { normalizeGraphQLError } from './errors';
 
 let cachedOnlineStorePublicationId: string | null = null;
 
-export async function getOnlineStorePublicationId(): Promise<string | null> {
+export async function getOnlineStorePublicationId(): Promise<string> {
   if (cachedOnlineStorePublicationId) return cachedOnlineStorePublicationId;
 
-  try {
-    const res = await executeShopifyGraphQL<{
-      publications: {
-        nodes: Array<{
-          id: string;
-          name: string;
-          autoPublish: boolean;
-        }>;
-      };
-    }>(ONLINE_STORE_PUBLICATIONS_QUERY, {
-      variables: { first: 25 },
-      label: 'Kanal yayınları',
-    });
+  const res = await executeShopifyGraphQL<{
+    publications: {
+      nodes: Array<{
+        id: string;
+        name: string;
+        autoPublish: boolean;
+      }>;
+    };
+  }>(ONLINE_STORE_PUBLICATIONS_QUERY, {
+    variables: { first: 25 },
+    label: 'Kanal yayınları',
+  });
 
-    const publications = res?.publications?.nodes || [];
-    const onlineStore =
-      publications.find(
-        (p) =>
-          p.name?.toLowerCase().includes('online store') ||
-          p.name?.toLowerCase().includes('online') ||
-          p.autoPublish === true
-      ) || publications[0];
-
-    if (onlineStore?.id) {
-      cachedOnlineStorePublicationId = onlineStore.id;
-      return cachedOnlineStorePublicationId;
-    }
-  } catch (err) {
-    console.warn('Online store yayını sorgulanamadı:', err);
+  const publications = res?.publications?.nodes || [];
+  if (publications.length === 0) {
+    throw new Error('Shopify mağazasında erişilebilir satış kanalı (Publication) bulunamadı. write_publications yetkisini kontrol edin.');
   }
 
-  return null;
+  const onlineStore =
+    publications.find(
+      (p) =>
+        p.name?.toLowerCase().includes('online store') ||
+        p.name?.toLowerCase().includes('online') ||
+        p.name?.toLowerCase().includes('web') ||
+        p.autoPublish === true
+    ) || publications[0];
+
+  if (!onlineStore?.id) {
+    throw new Error('Online Store satış kanalı publication ID bulunamadı.');
+  }
+
+  cachedOnlineStorePublicationId = onlineStore.id;
+  return cachedOnlineStorePublicationId;
 }
 
 export async function publishProductToOnlineStore(productId: string): Promise<{
@@ -51,9 +52,6 @@ export async function publishProductToOnlineStore(productId: string): Promise<{
 
   try {
     const publicationId = await getOnlineStorePublicationId();
-    if (!publicationId) {
-      return { success: false, error: 'Online Store yayını bulunamadı.' };
-    }
 
     const res = await executeShopifyGraphQL<{
       publishablePublish: {
@@ -70,7 +68,7 @@ export async function publishProductToOnlineStore(productId: string): Promise<{
 
     const userErrors = res?.publishablePublish?.userErrors || [];
     if (userErrors.length > 0) {
-      return { success: false, error: normalizeGraphQLError({ userErrors }) };
+      return { success: false, error: normalizeGraphQLError({ userErrors }, 'Kanal yayını gerçekleştirilemedi.') };
     }
 
     return { success: true, publicationId };

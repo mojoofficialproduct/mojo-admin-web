@@ -53,6 +53,13 @@ export async function POST(
       return NextResponse.json({ error: 'Renk adı zorunludur.' }, { status: 400 });
     }
 
+    if (imageItems.length === 0) {
+      return NextResponse.json(
+        { error: 'Yeni renk için en az 1 ürün görseli eklenmelidir.' },
+        { status: 400 }
+      );
+    }
+
     const result = await addSiblingColorProduct(id, colorName, {
       customColorHex,
       price: price || undefined,

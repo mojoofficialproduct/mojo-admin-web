@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { LogOut, Store, ArrowUpRight } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
@@ -29,20 +30,15 @@ export function Header() {
   return (
     <header className="topbar">
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div
-          style={{
-            fontWeight: 800,
-            fontSize: 16,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: '#000000',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span>MOJO</span>
-          <span style={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: '#F61F1F' }} />
+        <div style={{ display: 'flex', alignItems: 'center', height: 26 }}>
+          <Image
+            src="/mojo-logo.webp"
+            alt="MOJO"
+            width={95}
+            height={26}
+            style={{ objectFit: 'contain', width: 'auto', height: 24 }}
+            priority
+          />
         </div>
         <div style={{ width: 1, height: 18, backgroundColor: '#E5E7EB' }} />
         <div style={{ fontSize: 13, fontWeight: 600, color: '#4B5563' }}>Ürün Yönetimi</div>

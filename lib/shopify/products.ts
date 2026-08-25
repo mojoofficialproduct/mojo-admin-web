@@ -461,8 +461,13 @@ export async function createMojoProduct(
   }
 
   // 7. Publish to Online Store
+  let isPublished = false;
   if (status === 'ACTIVE') {
-    await publishProductToOnlineStore(createdProduct.id);
+    const pubRes = await publishProductToOnlineStore(createdProduct.id);
+    isPublished = pubRes.success;
+    if (!pubRes.success) {
+      console.warn(`Ürün Online Store kanalına yayınlanamadı (${createdProduct.id}):`, pubRes.error);
+    }
   }
 
   // 8. Self-initialize sibling list

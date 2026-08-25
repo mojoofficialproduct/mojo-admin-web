@@ -15,9 +15,9 @@ import {
   ExternalLink,
   Package,
   Layers,
-  Sparkles,
   Loader2,
   X,
+  ImageOff,
 } from 'lucide-react';
 import { formatPriceTRY } from '@/lib/shopify/products';
 import { getColorSwatch, parseMojoProductTitle } from '@/lib/shopify/mojo';
@@ -97,6 +97,11 @@ export default function ProductDetailPage({
     e.preventDefault();
     if (!newColorName.trim()) {
       error('Renk Seçimi Gerekli', 'Lütfen geçerli bir renk seçin.');
+      return;
+    }
+
+    if (colorImages.length === 0) {
+      error('Görsel Gerekli', 'Yeni renk için en az 1 ürün görseli eklemelisiniz.');
       return;
     }
 
@@ -266,8 +271,9 @@ export default function ProductDetailPage({
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
-              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
+              <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', gap: 4 }}>
                 <Package size={28} />
+                <span style={{ fontSize: 10 }}>Görsel Yok</span>
               </div>
             )}
           </div>
@@ -352,7 +358,10 @@ export default function ProductDetailPage({
 
             <button
               type="button"
-              onClick={() => setIsColorModalOpen(true)}
+              onClick={() => {
+                setColorImages([]);
+                setIsColorModalOpen(true);
+              }}
               className="btn btn-primary btn-sm"
               style={{ gap: 6, fontWeight: 700 }}
             >
@@ -369,6 +378,7 @@ export default function ProductDetailPage({
                 const sColor = sibling.customColorNameMetafield?.value || parseMojoProductTitle(sibling.title).colorName || 'Renk';
                 const sHex = sibling.customSwatchColorMetafield?.value || getColorSwatch(sColor);
                 const isCurrent = sibling.id === product.id;
+                const hasImage = Boolean(sibling.featuredImage?.url);
 
                 return (
                   <Link
@@ -382,26 +392,34 @@ export default function ProductDetailPage({
                       borderRadius: 'var(--radius-sm)',
                       border: isCurrent ? '2px solid #000000' : '1px solid var(--border-subtle)',
                       backgroundColor: isCurrent ? '#F9FAFB' : '#FFFFFF',
-                      transition: 'border-color 0.15s',
+                      transition: 'all 0.15s',
                     }}
                   >
                     <div
                       style={{
-                        width: 44,
-                        height: 56,
+                        width: 48,
+                        height: 60,
                         borderRadius: 4,
                         overflow: 'hidden',
                         backgroundColor: '#F3F4F6',
                         flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
                     >
-                      {sibling.featuredImage?.url && (
+                      {hasImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={sibling.featuredImage.url}
                           alt={sibling.title}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, color: '#9CA3AF' }}>
+                          <ImageOff size={16} />
+                          <span style={{ fontSize: 8, fontWeight: 600 }}>Görsel Yok</span>
+                        </div>
                       )}
                     </div>
 
@@ -447,7 +465,7 @@ export default function ProductDetailPage({
                   fontSize: 13,
                 }}
               >
-                Bu ürün şu anda tek renklidir. &quot;+ Yeni Renk Ekle&quot; butonuna basarak kardeş renk varyantları oluşturabilirsiniz.
+                Bu model şu anda tek renklidir. &quot;+ Yeni Renk Ekle&quot; butonuna basarak kardeş renk varyantları oluşturabilirsiniz.
               </div>
             )}
           </div>
@@ -481,23 +499,30 @@ export default function ProductDetailPage({
                     <img
                       src={imgUrl}
                       alt={item.alt || product.title}
-                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                    <div
                       style={{
                         position: 'absolute',
-                        top: 6,
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: 6,
                         left: 6,
-                        padding: '2px 6px',
-                        borderRadius: 4,
                         fontSize: 10,
                         fontWeight: 700,
-                        backgroundColor: idx === 0 ? '#000000' : 'rgba(0,0,0,0.65)',
+                        padding: '2px 6px',
+                        borderRadius: 3,
+                        backgroundColor: idx === 0 ? '#000000' : 'rgba(0,0,0,0.6)',
                         color: '#FFFFFF',
                       }}
                     >
                       {roleTag}
-                    </div>
+                    </span>
                   </div>
                 );
               })}
@@ -611,10 +636,15 @@ export default function ProductDetailPage({
                 />
               </div>
 
-              {/* Images */}
+              {/* Images (REQUIRED) */}
               <div>
-                <label className="label">Yeni Rengin Görselleri</label>
+                <label className="label">Yeni Rengin Görselleri *</label>
                 <ImageUploader images={colorImages} onChange={setColorImages} />
+                {colorImages.length === 0 && (
+                  <p style={{ fontSize: 12, color: '#EF4444', fontWeight: 600, marginTop: 6 }}>
+                    * Yeni renk için en az 1 ürün görseli ekleyin.
+                  </p>
+                )}
               </div>
 
               {/* Modal Buttons */}
@@ -630,9 +660,9 @@ export default function ProductDetailPage({
 
                 <button
                   type="submit"
-                  disabled={isCreatingColor}
+                  disabled={isCreatingColor || colorImages.length === 0}
                   className="btn btn-primary"
-                  style={{ minWidth: 140 }}
+                  style={{ minWidth: 150 }}
                 >
                   {isCreatingColor ? (
                     <>
