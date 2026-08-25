@@ -1,9 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
 
-export type ToastType = 'success' | 'error' | 'info';
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
 export interface ToastMessage {
   id: string;
@@ -17,6 +17,7 @@ interface ToastContextValue {
   showToast: (type: ToastType, title: string, description?: string, duration?: number) => void;
   success: (title: string, description?: string) => void;
   error: (title: string, description?: string) => void;
+  warning: (title: string, description?: string) => void;
   info: (title: string, description?: string) => void;
 }
 
@@ -55,13 +56,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [showToast]
   );
 
+  const warning = useCallback(
+    (title: string, description?: string) => showToast('warning', title, description, 5000),
+    [showToast]
+  );
+
   const info = useCallback(
     (title: string, description?: string) => showToast('info', title, description),
     [showToast]
   );
 
   return (
-    <ToastContext.Provider value={{ showToast, success, error, info }}>
+    <ToastContext.Provider value={{ showToast, success, error, warning, info }}>
       {children}
       <div
         style={{
@@ -97,12 +103,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   ? '1px solid #10B981'
                   : toast.type === 'error'
                   ? '1px solid #EF4444'
+                  : toast.type === 'warning'
+                  ? '1px solid #F59E0B'
                   : '1px solid #374151',
             }}
           >
             <div style={{ flexShrink: 0, marginTop: 1 }}>
               {toast.type === 'success' && <CheckCircle2 size={18} color="#10B981" />}
               {toast.type === 'error' && <AlertCircle size={18} color="#EF4444" />}
+              {toast.type === 'warning' && <AlertTriangle size={18} color="#F59E0B" />}
               {toast.type === 'info' && <Info size={18} color="#60A5FA" />}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>

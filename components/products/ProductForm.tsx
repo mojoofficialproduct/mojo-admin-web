@@ -10,7 +10,7 @@ import Link from 'next/link';
 
 export function ProductForm() {
   const router = useRouter();
-  const { success, error } = useToast();
+  const { success, error, warning } = useToast();
 
   // Form State
   const [modelTitle, setModelTitle] = useState('');
@@ -29,6 +29,7 @@ export function ProductForm() {
     id: string;
     numericId: string;
     title: string;
+    publicationWarning?: string;
   } | null>(null);
 
   // Dynamic preview title: "Luna Omuz Çantası - Krem"
@@ -88,11 +89,17 @@ export function ProductForm() {
         throw new Error(data.error || 'Ürün oluşturulurken bir hata oluştu');
       }
 
-      success('Ürün Shopify\'a eklendi.', `"${data.product.title}" başarıyla oluşturuldu.`);
+      if (data.publicationWarning) {
+        warning('Satış Kanalı Uyarısı', data.publicationWarning);
+      } else {
+        success('Ürün Oluşturuldu & Yayınlandı', `"${data.product.title}" Online Store ve POS kanallarına başarıyla yayınlandı.`);
+      }
+
       setCreatedProductResult({
         id: data.product.id,
         numericId: data.product.numericId,
         title: data.product.title,
+        publicationWarning: data.publicationWarning,
       });
     } catch (err) {
       error('Ürün Oluşturulamadı', err instanceof Error ? err.message : 'İşlem başarısız');
@@ -124,8 +131,8 @@ export function ProductForm() {
             width: 64,
             height: 64,
             borderRadius: '50%',
-            backgroundColor: '#ECFDF5',
-            color: '#10B981',
+            backgroundColor: createdProductResult.publicationWarning ? '#FEF3C7' : '#ECFDF5',
+            color: createdProductResult.publicationWarning ? '#D97706' : '#10B981',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -138,9 +145,44 @@ export function ProductForm() {
         <h2 className="heading-xl" style={{ fontSize: 24, marginBottom: 8 }}>
           Ürün Shopify&apos;a Eklendi
         </h2>
-        <p className="text-muted" style={{ marginBottom: 32, fontSize: 14 }}>
+        <p className="text-muted" style={{ marginBottom: 20, fontSize: 14 }}>
           <strong>{createdProductResult.title}</strong> ürünü mağazanıza başarıyla yüklendi, stok ve şablon ayarları tamamlandı.
         </p>
+
+        {createdProductResult.publicationWarning ? (
+          <div
+            style={{
+              backgroundColor: '#FEF2F2',
+              border: '1px solid #FEE2E2',
+              color: '#B91C1C',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 13,
+              marginBottom: 24,
+              textAlign: 'left',
+            }}
+          >
+            ⚠️ <strong>Yayın Durumu:</strong> {createdProductResult.publicationWarning}
+          </div>
+        ) : (
+          <div
+            style={{
+              backgroundColor: '#F0FDF4',
+              border: '1px solid #DCFCE7',
+              color: '#15803D',
+              padding: '8px 14px',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 12,
+              fontWeight: 600,
+              marginBottom: 24,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            ✓ Online Store ve Point of Sale kanallarında aktif (Kanallar: 2)
+          </div>
+        )}
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
           <Link

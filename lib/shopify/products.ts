@@ -17,7 +17,7 @@ import {
   SiblingProductInput,
 } from './mojo';
 import { fetchLocations, setInventoryQuantity } from './inventory';
-import { publishProductToOnlineStore } from './publications';
+import { publishProductToDefaultSalesChannels, PublicationResult } from './publications';
 import { uploadAndAttachProductImages, ImageUploadItem } from './media';
 
 export interface ProductSummary {
@@ -41,6 +41,7 @@ export interface ProductSummary {
   modelTitle?: string;
   groupId?: string;
   isPublished?: boolean;
+  publishedChannelsCount?: number;
 }
 
 export interface CreateProductInput {
@@ -301,6 +302,7 @@ export async function createMojoProduct(
   success: boolean;
   publicationSuccess?: boolean;
   publicationWarning?: string;
+  publication?: PublicationResult;
   product?: ProductSummary;
   error?: string;
   details?: Record<string, unknown>;
@@ -463,15 +465,16 @@ export async function createMojoProduct(
     }
   }
 
-  // 7. Publish to Online Store
-  let isPublished = false;
+  // 7. Publish to Default Sales Channels (Online Store + POS)
+  let publicationDetails: PublicationResult | undefined = undefined;
   if (status === 'ACTIVE') {
-    const pubRes = await publishProductToOnlineStore(createdProduct.id);
-    isPublished = pubRes.success;
-    if (!pubRes.success) {
-      console.warn(`Ürün Online Store kanalına yayınlanamadı (${createdProduct.id}):`, pubRes.error);
+    publicationDetails = await publishProductToDefaultSalesChannels(createdProduct.id);
+    if (!publicationDetails.success || publicationDetails.actualCount === 0) {
+      console.warn(`Ürün satış kanallarına yayınlanamadı (${createdProduct.id}):`, publicationDetails.error);
     }
   }
+
+  const isPublished = Boolean(publicationDetails && publicationDetails.actualCount > 0);
 
   // 8. Self-initialize sibling list
   const primaryId = createdProduct.id;
@@ -492,7 +495,11 @@ export async function createMojoProduct(
   return {
     success: true,
     publicationSuccess: isPublished,
-    publicationWarning: !isPublished && status === 'ACTIVE' ? 'Ürün oluşturuldu fakat Online Store kanalında yayınlanamadı.' : undefined,
+    publicationWarning:
+      status === 'ACTIVE' && (!publicationDetails || publicationDetails.actualCount === 0)
+        ? 'Ürün oluşturuldu ancak satış kanallarına (Online Store / POS) yayınlanamadı.'
+        : undefined,
+    publication: publicationDetails,
     product: {
       id: createdProduct.id,
       numericId: createdProduct.id.split('/').pop() || '',
@@ -513,6 +520,7 @@ export async function createMojoProduct(
       modelTitle,
       groupId,
       isPublished,
+      publishedChannelsCount: publicationDetails?.actualCount ?? 0,
     },
   };
 }

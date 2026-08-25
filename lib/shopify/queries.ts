@@ -254,8 +254,12 @@ export const PUBLISHABLE_PUBLISH_MUTATION = /* GraphQL */ `
   mutation PublishProduct($id: ID!, $input: [PublicationInput!]!) {
     publishablePublish(id: $id, input: $input) {
       publishable {
-        availablePublicationCount
-        publicationCount
+        availablePublicationsCount {
+          count
+        }
+        resourcePublicationsCount {
+          count
+        }
       }
       userErrors {
         field
