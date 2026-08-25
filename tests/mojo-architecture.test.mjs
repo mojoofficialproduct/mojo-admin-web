@@ -185,3 +185,348 @@ test('MOJO taxonomy categories and default bag category configuration', async ()
   assert.ok(defaultCat.name.toLowerCase().includes('çanta'));
 });
 
+function createMockFetch(graphqlHandler) {
+  return async (url, init) => {
+    const urlStr = String(url);
+    if (urlStr.includes('/admin/oauth/access_token')) {
+      return {
+        ok: true,
+        json: async () => ({
+          access_token: 'shpat_mock_test_token_12345',
+          token_type: 'Bearer',
+          expires_in: 86400,
+        }),
+      };
+    }
+    return graphqlHandler(url, init);
+  };
+}
+
+test('Inventory CAS: setInventoryQuantity skips mutation when current stock already matches target', async () => {
+  const { setInventoryQuantity } = await import('../lib/shopify/inventory.ts');
+
+  let mutationCalled = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = createMockFetch(async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('GetInventoryItemLevel')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            inventoryItem: {
+              id: 'gid://shopify/InventoryItem/12345',
+              inventoryLevels: {
+                nodes: [
+                  {
+                    location: { id: 'gid://shopify/Location/999' },
+                    quantities: [{ name: 'available', quantity: 15 }],
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('InventorySetQuantities')) {
+      mutationCalled = true;
+      return {
+        ok: true,
+        json: async () => ({
+          data: { inventorySetQuantities: { inventoryAdjustmentGroup: { id: 'adj_1' }, userErrors: [] } },
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  });
+
+  try {
+    const res = await setInventoryQuantity('gid://shopify/InventoryItem/12345', 'gid://shopify/Location/999', 15);
+    assert.equal(res, true);
+    assert.equal(mutationCalled, false, 'Mutation should not be called when quantity is unchanged');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Inventory CAS: setInventoryQuantity retries once on stale quantity and succeeds', async () => {
+  const { setInventoryQuantity } = await import('../lib/shopify/inventory.ts');
+
+  let readCount = 0;
+  let mutationCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = createMockFetch(async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('GetInventoryItemLevel')) {
+      readCount++;
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            inventoryItem: {
+              id: 'gid://shopify/InventoryItem/12345',
+              inventoryLevels: {
+                nodes: [
+                  {
+                    location: { id: 'gid://shopify/Location/999' },
+                    quantities: [{ name: 'available', quantity: readCount === 1 ? 10 : 12 }],
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('InventorySetQuantities')) {
+      mutationCount++;
+      if (mutationCount === 1) {
+        // First mutation attempt fails with stale quantity error
+        return {
+          ok: true,
+          json: async () => ({
+            data: {
+              inventorySetQuantities: {
+                userErrors: [
+                  {
+                    field: ['input', 'quantities', '0', 'changeFromQuantity'],
+                    message: 'The changeFromQuantity argument no longer matches the persisted quantity.',
+                    code: 'CHANGE_FROM_QUANTITY_STALE',
+                  },
+                ],
+              },
+            },
+          }),
+        };
+      }
+      // Second attempt succeeds
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            inventorySetQuantities: {
+              inventoryAdjustmentGroup: { id: 'adj_success' },
+              userErrors: [],
+            },
+          },
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  });
+
+  try {
+    const res = await setInventoryQuantity('gid://shopify/InventoryItem/12345', 'gid://shopify/Location/999', 20);
+    assert.equal(res, true);
+    assert.equal(readCount, 2, 'Should re-read quantity before retry');
+    assert.equal(mutationCount, 2, 'Should retry mutation once');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Inventory CAS: setInventoryQuantity formats user-friendly error when stale retries exhausted', async () => {
+  const { setInventoryQuantity } = await import('../lib/shopify/inventory.ts');
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = createMockFetch(async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('GetInventoryItemLevel')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            inventoryItem: {
+              id: 'gid://shopify/InventoryItem/12345',
+              inventoryLevels: {
+                nodes: [
+                  {
+                    location: { id: 'gid://shopify/Location/999' },
+                    quantities: [{ name: 'available', quantity: 10 }],
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('InventorySetQuantities')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            inventorySetQuantities: {
+              userErrors: [
+                {
+                  field: ['input', 'quantities', '0', 'changeFromQuantity'],
+                  message: 'The changeFromQuantity argument no longer matches the persisted quantity.',
+                  code: 'CHANGE_FROM_QUANTITY_STALE',
+                },
+              ],
+            },
+          },
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  });
+
+  try {
+    await assert.rejects(
+      async () => {
+        await setInventoryQuantity('gid://shopify/InventoryItem/12345', 'gid://shopify/Location/999', 25);
+      },
+      (err) => {
+        assert.ok(err.message.includes('Stok siz düzenlerken Shopify\'da değişti'));
+        assert.equal(err.message.includes('Variable $input'), false);
+        return true;
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Publication verification: verifyProductPublicationsWithRetry succeeds with target channel matching', async () => {
+  const { verifyProductPublicationsWithRetry } = await import('../lib/shopify/publications.ts');
+
+  const targetIds = ['gid://shopify/Publication/1', 'gid://shopify/Publication/2'];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = createMockFetch(async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('VerifyProductPublications')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            product: {
+              id: 'gid://shopify/Product/1001',
+              publishedOnCurrentPublication: true,
+              resourcePublications: {
+                nodes: [
+                  { isPublished: true, publication: { id: 'gid://shopify/Publication/1', name: 'Online Store' } },
+                  { isPublished: true, publication: { id: 'gid://shopify/Publication/2', name: 'Point of Sale' } },
+                ],
+              },
+            },
+          },
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  });
+
+  try {
+    const result = await verifyProductPublicationsWithRetry('gid://shopify/Product/1001', targetIds, 2);
+    assert.equal(result.isPublished, true);
+    assert.equal(result.actualCount, 2);
+    assert.equal(result.channels.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Sibling Color Workflow: addSiblingColorProduct supports customizable fields and inherits category', async () => {
+  const { addSiblingColorProduct } = await import('../lib/shopify/products.ts');
+
+  let passedCreateInput = null;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = createMockFetch(async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('GetProduct')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            product: {
+              id: 'gid://shopify/Product/5001',
+              title: 'Luna Omuz Çantası - Siyah',
+              handle: 'luna-omuz-cantasi-siyah',
+              descriptionHtml: '<p>Kaynak ürün açıklaması</p>',
+              category: { id: 'gid://shopify/TaxonomyCategory/aa-1', name: 'Kadın Çantaları' },
+              productType: 'Omuz Çantası',
+              tags: ['luna', 'omuz'],
+              variants: { nodes: [{ id: 'gid://shopify/ProductVariant/50011', price: '1299.00', compareAtPrice: '1599.00' }] },
+              customGroupIdMetafield: { value: 'grp_luna_123' },
+              customModelTitleMetafield: { value: 'Luna Omuz Çantası' },
+              customColorNameMetafield: { value: 'Siyah' },
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('ProductCreate')) {
+      const parsedBody = JSON.parse(bodyStr);
+      passedCreateInput = parsedBody.variables?.product;
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productCreate: {
+              product: {
+                id: 'gid://shopify/Product/5002',
+                title: passedCreateInput?.title,
+                handle: 'luna-omuz-cantasi-bordo',
+                status: 'ACTIVE',
+                category: { id: passedCreateInput?.category, name: 'Kadın Çantaları' },
+                variants: { nodes: [{ id: 'gid://shopify/ProductVariant/50021' }] },
+              },
+              userErrors: [],
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('ProductVariantsBulkUpdate') || bodyStr.includes('PublishProduct') || bodyStr.includes('VerifyProductPublications') || bodyStr.includes('GetOnlineStorePublications')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productVariantsBulkUpdate: { userErrors: [] },
+            publications: { nodes: [{ id: 'gid://shopify/Publication/1', name: 'Online Store', autoPublish: true }] },
+            publishablePublish: { userErrors: [] },
+            product: { id: 'gid://shopify/Product/5002', publishedOnCurrentPublication: true, resourcePublications: { nodes: [{ isPublished: true, publication: { id: 'gid://shopify/Publication/1', name: 'Online Store' } }] } },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('productUpdate')) {
+      return {
+        ok: true,
+        json: async () => ({ data: { productUpdate: { product: { id: 'gid://shopify/Product/5001' }, userErrors: [] } } }),
+      };
+    }
+    return originalFetch(url, init);
+  });
+
+  try {
+    // 1. Test with customized description, custom price, and inherited category
+    const res = await addSiblingColorProduct('gid://shopify/Product/5001', 'Bordo', {
+      price: '1499.00',
+      compareAtPrice: '1799.00',
+      descriptionHtml: '<p>Bordo renge özel açıklama</p>',
+    });
+
+    assert.equal(res.success, true);
+    assert.equal(passedCreateInput?.title, 'Luna Omuz Çantası - Bordo');
+    assert.equal(passedCreateInput?.descriptionHtml, '<p>Bordo renge özel açıklama</p>');
+    assert.equal(passedCreateInput?.category, 'gid://shopify/TaxonomyCategory/aa-1', 'Should inherit category from source');
+    assert.equal(passedCreateInput?.productType, 'Omuz Çantası', 'Should inherit productType from source');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('UI Regression: Product detail page button contains single plus sign', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const filePath = path.resolve('app/products/[id]/page.tsx');
+  const content = fs.readFileSync(filePath, 'utf8');
+
+  assert.equal(content.includes('+ + Yeni Renk Ekle'), false, 'Must not contain double plus icon');
+  assert.ok(content.includes('<span>Yeni Renk Ekle</span>') || content.includes('>Yeni Renk Ekle<'));
+});
+
+

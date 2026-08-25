@@ -592,20 +592,34 @@ export async function createMojoProduct(
   };
 }
 
+export interface AddSiblingColorOptions {
+  customColorHex?: string;
+  price?: string;
+  compareAtPrice?: string;
+  quantity?: string | number;
+  sku?: string;
+  barcode?: string;
+  descriptionHtml?: string;
+  categoryId?: string;
+  productType?: string;
+  tags?: string[] | string;
+  weight?: number | string;
+  weightUnit?: string;
+  status?: 'ACTIVE' | 'DRAFT';
+  requiresShipping?: boolean;
+  handle?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  images?: ImageUploadItem[];
+}
+
 /**
  * Add Sibling Color to Existing Product Group
  */
 export async function addSiblingColorProduct(
   sourceProductId: string,
   newColorName: string,
-  options: {
-    customColorHex?: string;
-    price?: string;
-    compareAtPrice?: string;
-    quantity?: string | number;
-    sku?: string;
-    images?: ImageUploadItem[];
-  }
+  options: AddSiblingColorOptions = {}
 ): Promise<{ success: boolean; product?: ProductSummary; error?: string }> {
   const sourceProduct = await fetchProductById(sourceProductId);
   if (!sourceProduct) {
@@ -618,9 +632,21 @@ export async function addSiblingColorProduct(
     sourceProduct.customGroupIdMetafield?.value || `grp_${Date.now()}_${slugifyTurkish(modelTitle).slice(0, 20)}`;
 
   const firstVariant = sourceProduct.variants?.nodes?.[0];
-  const price = options.price || firstVariant?.price || '0';
-  const compareAtPrice = options.compareAtPrice || firstVariant?.compareAtPrice || '';
-  const quantity = options.quantity !== undefined ? options.quantity : '0';
+  const price = options.price !== undefined && String(options.price).trim() !== '' ? options.price : firstVariant?.price || '0';
+  const compareAtPrice =
+    options.compareAtPrice !== undefined && String(options.compareAtPrice).trim() !== ''
+      ? options.compareAtPrice
+      : firstVariant?.compareAtPrice || '';
+  const quantity = options.quantity !== undefined && String(options.quantity).trim() !== '' ? options.quantity : '0';
+  const descriptionHtml =
+    options.descriptionHtml !== undefined ? options.descriptionHtml : sourceProduct.descriptionHtml || '';
+  const categoryId = options.categoryId || sourceProduct.category?.id;
+  const productType =
+    options.productType !== undefined && String(options.productType).trim() !== ''
+      ? options.productType
+      : sourceProduct.productType || 'Çanta';
+  const tags = options.tags !== undefined ? options.tags : sourceProduct.tags;
+  const status = options.status || 'ACTIVE';
 
   const createResult = await createMojoProduct(
     {
@@ -628,12 +654,21 @@ export async function addSiblingColorProduct(
       colorName: newColorName,
       customColorHex: options.customColorHex,
       price: String(price),
-      compareAtPrice: String(compareAtPrice),
+      compareAtPrice: compareAtPrice ? String(compareAtPrice) : undefined,
       quantity,
       sku: options.sku,
-      descriptionHtml: sourceProduct.descriptionHtml,
-      status: 'ACTIVE',
-      categoryId: sourceProduct.category?.id,
+      barcode: options.barcode,
+      descriptionHtml,
+      status,
+      categoryId,
+      productType,
+      tags,
+      weight: options.weight,
+      weightUnit: options.weightUnit,
+      requiresShipping: options.requiresShipping,
+      handle: options.handle,
+      seoTitle: options.seoTitle,
+      seoDescription: options.seoDescription,
     },
     options.images || []
   );
@@ -794,13 +829,17 @@ export async function updateMojoProduct(
     }
   }
 
-  // 3. Update Inventory if quantity provided
+  // 3. Update Inventory only if quantity provided AND changed
   if (input.quantity !== undefined && String(input.quantity).trim() !== '') {
     const qty = parseInt(String(input.quantity), 10);
     if (!isNaN(qty)) {
       const currentProduct = await fetchProductById(productId);
+      const currentInventory =
+        currentProduct?.totalInventory ?? currentProduct?.variants?.nodes?.[0]?.inventoryQuantity;
       const inventoryItemId = currentProduct?.variants?.nodes?.[0]?.inventoryItem?.id;
-      if (inventoryItemId) {
+
+      // Only perform inventory mutation if quantity actually differs
+      if (inventoryItemId && currentInventory !== qty) {
         let targetLocationId = input.locationId;
         if (!targetLocationId) {
           const locations = await fetchLocations();

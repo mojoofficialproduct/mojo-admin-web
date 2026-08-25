@@ -18,11 +18,14 @@ import {
   Loader2,
   X,
   ImageOff,
+  Edit3,
+  Check,
+  Save,
+  Sparkles,
 } from 'lucide-react';
 import { formatPriceTRY } from '@/lib/shopify/products';
 import { getColorSwatch, parseMojoProductTitle } from '@/lib/shopify/mojo';
 import { MOJO_TAXONOMY_CATEGORIES, getDefaultMojoCategory } from '@/lib/shopify/categories';
-import { Edit3, Check, Save } from 'lucide-react';
 
 export default function ProductDetailPage({
   params,
@@ -52,13 +55,46 @@ export default function ProductDetailPage({
   const [editTags, setEditTags] = useState('');
   const [editStatus, setEditStatus] = useState<'ACTIVE' | 'DRAFT'>('ACTIVE');
 
+  // Initial Edit Values for Dirty Tracking
+  const [initialEditValues, setInitialEditValues] = useState<{
+    title: string;
+    description: string;
+    category: string;
+    price: string;
+    compareAtPrice: string;
+    stock: string;
+    sku: string;
+    barcode: string;
+    tags: string;
+    status: 'ACTIVE' | 'DRAFT';
+  }>({
+    title: '',
+    description: '',
+    category: getDefaultMojoCategory().id,
+    price: '',
+    compareAtPrice: '',
+    stock: '0',
+    sku: '',
+    barcode: '',
+    tags: '',
+    status: 'ACTIVE',
+  });
+
   // New Sibling Color Modal State
   const [isColorModalOpen, setIsColorModalOpen] = useState(false);
-  const [newColorName, setNewColorName] = useState('Krem');
+  const [newColorName, setNewColorName] = useState('Bordo');
   const [customColorHex, setCustomColorHex] = useState('');
   const [colorPrice, setColorPrice] = useState('');
+  const [colorCompareAtPrice, setColorCompareAtPrice] = useState('');
   const [colorStock, setColorStock] = useState('10');
   const [colorSku, setColorSku] = useState('');
+  const [colorBarcode, setColorBarcode] = useState('');
+  const [colorDescription, setColorDescription] = useState('');
+  const [colorCategory, setColorCategory] = useState(getDefaultMojoCategory().id);
+  const [colorProductType, setColorProductType] = useState('Çanta');
+  const [colorTags, setColorTags] = useState('çanta, kadın');
+  const [colorWeight, setColorWeight] = useState('');
+  const [colorStatus, setColorStatus] = useState<'ACTIVE' | 'DRAFT'>('ACTIVE');
   const [colorImages, setColorImages] = useState<LocalImageItem[]>([]);
   const [isCreatingColor, setIsCreatingColor] = useState(false);
 
@@ -74,37 +110,48 @@ export default function ProductDetailPage({
       setProduct(p);
 
       const firstVar = p?.variants?.nodes?.[0];
-      if (firstVar?.price) {
-        setColorPrice(firstVar.price);
-        setEditPrice(firstVar.price);
-      }
-      if (firstVar?.compareAtPrice) {
-        setEditCompareAtPrice(firstVar.compareAtPrice);
-      }
-      if (firstVar?.sku) {
-        setEditSku(firstVar.sku);
-      }
-      if (firstVar?.barcode) {
-        setEditBarcode(firstVar.barcode);
-      }
-      if (p?.title) {
-        setEditTitle(p.title);
-      }
-      if (p?.descriptionHtml) {
-        setEditDescription(p.descriptionHtml.replace(/<[^>]*>?/gm, ''));
-      }
-      if (p?.category?.id) {
-        setEditCategory(p.category.id);
-      }
-      if (p?.totalInventory !== undefined) {
-        setEditStock(String(p.totalInventory));
-      }
-      if (p?.status) {
-        setEditStatus(p.status);
-      }
-      if (p?.tags) {
-        setEditTags(Array.isArray(p.tags) ? p.tags.join(', ') : String(p.tags));
-      }
+      const initialPrice = firstVar?.price || '';
+      const initialCompareAt = firstVar?.compareAtPrice || '';
+      const initialSku = firstVar?.sku || '';
+      const initialBarcode = firstVar?.barcode || '';
+      const initialTitle = p?.title || '';
+      const initialDesc = p?.descriptionHtml ? p.descriptionHtml.replace(/<[^>]*>?/gm, '') : '';
+      const initialCat = p?.category?.id || getDefaultMojoCategory().id;
+      const initialStock = p?.totalInventory !== undefined ? String(p.totalInventory) : '0';
+      const initialStatus = (p?.status as 'ACTIVE' | 'DRAFT') || 'ACTIVE';
+      const initialTags = p?.tags ? (Array.isArray(p.tags) ? p.tags.join(', ') : String(p.tags)) : '';
+
+      setEditTitle(initialTitle);
+      setEditDescription(initialDesc);
+      setEditCategory(initialCat);
+      setEditPrice(initialPrice);
+      setEditCompareAtPrice(initialCompareAt);
+      setEditStock(initialStock);
+      setEditSku(initialSku);
+      setEditBarcode(initialBarcode);
+      setEditStatus(initialStatus);
+      setEditTags(initialTags);
+
+      setInitialEditValues({
+        title: initialTitle,
+        description: initialDesc,
+        category: initialCat,
+        price: initialPrice,
+        compareAtPrice: initialCompareAt,
+        stock: initialStock,
+        sku: initialSku,
+        barcode: initialBarcode,
+        tags: initialTags,
+        status: initialStatus,
+      });
+
+      setColorPrice(initialPrice);
+      setColorCompareAtPrice(initialCompareAt);
+      setColorCategory(initialCat);
+      setColorProductType(p?.productType || 'Çanta');
+      setColorDescription(initialDesc);
+      setColorTags(initialTags);
+      setColorStock(initialStock);
     } catch (err) {
       console.error('Product load error:', err);
       error('Yükleme Hatası', 'Ürün detayı Shopify üzerinden alınamadı.');
@@ -117,8 +164,23 @@ export default function ProductDetailPage({
     loadProduct();
   }, [loadProduct]);
 
+  // Dirty state tracking for edit form
+  const isEditDirty =
+    editTitle !== initialEditValues.title ||
+    editDescription !== initialEditValues.description ||
+    editCategory !== initialEditValues.category ||
+    editPrice !== initialEditValues.price ||
+    editCompareAtPrice !== initialEditValues.compareAtPrice ||
+    editStock !== initialEditValues.stock ||
+    editSku !== initialEditValues.sku ||
+    editBarcode !== initialEditValues.barcode ||
+    editTags !== initialEditValues.tags ||
+    editStatus !== initialEditValues.status;
+
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isEditDirty) return;
+
     try {
       setIsSavingEdit(true);
       const res = await fetch(`/api/products/${resolvedParams.id}`, {
@@ -176,6 +238,40 @@ export default function ProductDetailPage({
     }
   };
 
+  const handlePrefillFromSource = () => {
+    if (!product) return;
+    const firstVar = product.variants?.nodes?.[0];
+    if (firstVar?.price) setColorPrice(firstVar.price);
+    if (firstVar?.compareAtPrice) setColorCompareAtPrice(firstVar.compareAtPrice);
+    if (product.totalInventory !== undefined) setColorStock(String(product.totalInventory));
+    if (product.descriptionHtml) setColorDescription(product.descriptionHtml.replace(/<[^>]*>?/gm, ''));
+    if (product.category?.id) setColorCategory(product.category.id);
+    if (product.productType) setColorProductType(product.productType);
+    if (product.tags) setColorTags(Array.isArray(product.tags) ? product.tags.join(', ') : String(product.tags));
+    if (firstVar?.barcode) setColorBarcode(firstVar.barcode);
+    if (product.status) setColorStatus(product.status);
+    success('Bilgiler Dolduruldu', 'Kaynak ürün bilgileri form alanlarına aktarıldı. İstediğiniz alanları özelleştirebilirsiniz.');
+  };
+
+  const handleOpenColorModal = () => {
+    setColorImages([]);
+    if (product) {
+      const firstVar = product.variants?.nodes?.[0];
+      if (firstVar?.price) setColorPrice(firstVar.price);
+      if (firstVar?.compareAtPrice) setColorCompareAtPrice(firstVar.compareAtPrice);
+      if (product.category?.id) setColorCategory(product.category.id);
+      if (product.productType) setColorProductType(product.productType);
+      if (product.descriptionHtml) setColorDescription(product.descriptionHtml.replace(/<[^>]*>?/gm, ''));
+      if (product.tags) setColorTags(Array.isArray(product.tags) ? product.tags.join(', ') : String(product.tags));
+      if (product.totalInventory !== undefined) setColorStock(String(product.totalInventory));
+      setColorSku('');
+      setColorBarcode('');
+      setColorWeight('');
+      setColorStatus('ACTIVE');
+    }
+    setIsColorModalOpen(true);
+  };
+
   const handleCreateSiblingColor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newColorName.trim()) {
@@ -199,10 +295,42 @@ export default function ProductDetailPage({
       if (colorPrice.trim()) {
         formData.append('price', colorPrice.trim().replace(',', '.'));
       }
+      if (colorCompareAtPrice.trim()) {
+        formData.append('compareAtPrice', colorCompareAtPrice.trim().replace(',', '.'));
+      }
       formData.append('quantity', colorStock.trim() || '0');
       if (colorSku.trim()) {
         formData.append('sku', colorSku.trim());
       }
+      if (colorBarcode.trim()) {
+        formData.append('barcode', colorBarcode.trim());
+      }
+      if (colorDescription.trim()) {
+        const html = colorDescription
+          .split('\n')
+          .filter(Boolean)
+          .map((line) => {
+            if (line.startsWith('• ') || line.startsWith('- ')) {
+              return `<li>${line.slice(2).trim()}</li>`;
+            }
+            return `<p>${line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>')}</p>`;
+          })
+          .join('');
+        formData.append('descriptionHtml', html || `<p>${colorDescription.trim()}</p>`);
+      }
+      if (colorCategory) {
+        formData.append('categoryId', colorCategory);
+      }
+      if (colorProductType.trim()) {
+        formData.append('productType', colorProductType.trim());
+      }
+      if (colorTags.trim()) {
+        formData.append('tags', colorTags.trim());
+      }
+      if (colorWeight.trim()) {
+        formData.append('weight', colorWeight.trim().replace(',', '.'));
+      }
+      formData.append('status', colorStatus);
 
       // Append binary files
       colorImages.forEach((item) => {
@@ -601,15 +729,12 @@ export default function ProductDetailPage({
 
             <button
               type="button"
-              onClick={() => {
-                setColorImages([]);
-                setIsColorModalOpen(true);
-              }}
+              onClick={handleOpenColorModal}
               className="btn btn-primary btn-sm"
               style={{ gap: 6, fontWeight: 700 }}
             >
               <Plus size={14} />
-              <span>+ Yeni Renk Ekle</span>
+              <span>Yeni Renk Ekle</span>
             </button>
           </div>
 
@@ -797,8 +922,8 @@ export default function ProductDetailPage({
             className="card animate-fade-in"
             style={{
               width: '100%',
-              maxWidth: 580,
-              maxHeight: '90vh',
+              maxWidth: 680,
+              maxHeight: '92vh',
               overflowY: 'auto',
               backgroundColor: '#FFFFFF',
               borderRadius: 'var(--radius-lg)',
@@ -808,20 +933,63 @@ export default function ProductDetailPage({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            {/* Modal Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 16 }}>
               <div>
-                <h3 className="heading-lg" style={{ fontSize: 18 }}>Yeni Renk Ekle</h3>
-                <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
-                  <strong>{parsed.modelTitle || product.title}</strong> için kardeş renk ürünü oluşturun
+                <h3 className="heading-lg" style={{ fontSize: 20 }}>Yeni Renk Ürünü</h3>
+                <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
+                  <strong>{parsed.modelTitle || product.title}</strong> modeli için ayrı ürün kaydı oluşturun ve kardeş renk olarak bağlayın.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setIsColorModalOpen(false)}
-                style={{ color: '#9CA3AF', padding: 4 }}
+                style={{ color: '#9CA3AF', padding: 4, cursor: 'pointer', background: 'none', border: 'none' }}
               >
-                <X size={18} />
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Source Product Info & Quick Prefill Bar */}
+            <div
+              style={{
+                backgroundColor: '#F9FAFB',
+                border: '1px solid #E5E7EB',
+                borderRadius: 'var(--radius-sm)',
+                padding: '12px 16px',
+                marginBottom: 20,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase' }}>Model</span>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
+                    {parsed.modelTitle || product.title}
+                  </div>
+                </div>
+                <div style={{ width: 1, height: 24, backgroundColor: '#E5E7EB' }} />
+                <div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase' }}>Model Grubu</span>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#4B5563' }}>
+                    Mojo Sibling Group
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handlePrefillFromSource}
+                className="btn btn-secondary btn-sm"
+                style={{ gap: 6, fontSize: 12 }}
+              >
+                <Sparkles size={13} color="#D97706" />
+                <span>Kaynak Üründen Bilgileri Doldur</span>
               </button>
             </div>
 
@@ -839,10 +1007,28 @@ export default function ProductDetailPage({
                 />
               </div>
 
-              {/* Price & Stock */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {/* Dynamic Title Preview */}
+              <div
+                style={{
+                  padding: '10px 14px',
+                  backgroundColor: '#F3F4F6',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 13,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <span style={{ color: '#6B7280', fontWeight: 600 }}>Ürün Başlığı:</span>
+                <strong style={{ color: '#111827' }}>
+                  {parsed.modelTitle || product.title} - {newColorName}
+                </strong>
+              </div>
+
+              {/* Price & Compare-At Price & Stock */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 <div>
-                  <label className="label">Fiyat (₺) *</label>
+                  <label className="label">Fiyat (TRY) *</label>
                   <input
                     type="text"
                     placeholder="1399"
@@ -850,6 +1036,17 @@ export default function ProductDetailPage({
                     onChange={(e) => setColorPrice(e.target.value)}
                     className="input-field"
                     required
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Karşılaştırma Fiyatı</label>
+                  <input
+                    type="text"
+                    placeholder="Opsiyonel (örn. 1799)"
+                    value={colorCompareAtPrice}
+                    onChange={(e) => setColorCompareAtPrice(e.target.value)}
+                    className="input-field"
                   />
                 </div>
 
@@ -867,31 +1064,126 @@ export default function ProductDetailPage({
                 </div>
               </div>
 
-              {/* SKU */}
+              {/* Category & Product Type */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 12 }}>
+                <div>
+                  <label className="label">Shopify Kategorisi</label>
+                  <select
+                    value={colorCategory}
+                    onChange={(e) => setColorCategory(e.target.value)}
+                    className="input-field"
+                  >
+                    {MOJO_TAXONOMY_CATEGORIES.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label">Ürün Türü</label>
+                  <input
+                    type="text"
+                    placeholder="Çanta"
+                    value={colorProductType}
+                    onChange={(e) => setColorProductType(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              {/* SKU & Barcode & Weight */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.8fr', gap: 12 }}>
+                <div>
+                  <label className="label">SKU Kodu (Opsiyonel)</label>
+                  <input
+                    type="text"
+                    placeholder="Otomatik Üretilir (Benzersiz)"
+                    value={colorSku}
+                    onChange={(e) => setColorSku(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Barkod</label>
+                  <input
+                    type="text"
+                    placeholder="Opsiyonel"
+                    value={colorBarcode}
+                    onChange={(e) => setColorBarcode(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Ağırlık (kg)</label>
+                  <input
+                    type="text"
+                    placeholder="0.5"
+                    value={colorWeight}
+                    onChange={(e) => setColorWeight(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              {/* Tags & Status */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 12 }}>
+                <div>
+                  <label className="label">Etiketler (Virgülle ayırın)</label>
+                  <input
+                    type="text"
+                    placeholder="çanta, kadın, omuz çantası"
+                    value={colorTags}
+                    onChange={(e) => setColorTags(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Yayın Durumu</label>
+                  <select
+                    value={colorStatus}
+                    onChange={(e) => setColorStatus(e.target.value as 'ACTIVE' | 'DRAFT')}
+                    className="input-field"
+                  >
+                    <option value="ACTIVE">Aktif (Online Store + POS)</option>
+                    <option value="DRAFT">Taslak</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Description */}
               <div>
-                <label className="label">SKU Kodu (Opsiyonel)</label>
-                <input
-                  type="text"
-                  placeholder="Otomatik Üretilir"
-                  value={colorSku}
-                  onChange={(e) => setColorSku(e.target.value)}
+                <label className="label">Ürün Açıklaması (Opsiyonel / Renge Özel)</label>
+                <textarea
+                  rows={3}
+                  placeholder="Ürün açıklaması..."
+                  value={colorDescription}
+                  onChange={(e) => setColorDescription(e.target.value)}
                   className="input-field"
+                  style={{ resize: 'vertical' }}
                 />
               </div>
 
               {/* Images (REQUIRED) */}
               <div>
-                <label className="label">Yeni Rengin Görselleri *</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label className="label" style={{ marginBottom: 0 }}>Yeni Rengin Görselleri *</label>
+                  <span style={{ fontSize: 11, color: '#6B7280' }}>1 = Kapak, 2 = Hover, 3+ = Galeri</span>
+                </div>
                 <ImageUploader images={colorImages} onChange={setColorImages} />
                 {colorImages.length === 0 && (
                   <p style={{ fontSize: 12, color: '#EF4444', fontWeight: 600, marginTop: 6 }}>
-                    * Yeni renk için en az 1 ürün görseli ekleyin.
+                    * Yeni renk için en az 1 ürün görseli yüklemelisiniz.
                   </p>
                 )}
               </div>
 
-              {/* Modal Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+              {/* Modal Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8, paddingTop: 14, borderTop: '1px solid var(--border-subtle)' }}>
                 <button
                   type="button"
                   onClick={() => setIsColorModalOpen(false)}
@@ -905,15 +1197,18 @@ export default function ProductDetailPage({
                   type="submit"
                   disabled={isCreatingColor || colorImages.length === 0}
                   className="btn btn-primary"
-                  style={{ minWidth: 150 }}
+                  style={{ minWidth: 200, gap: 8 }}
                 >
                   {isCreatingColor ? (
                     <>
-                      <Loader2 size={14} className="animate-spin" />
-                      <span>Oluşturuluyor...</span>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>Rengi Oluşturuluyor...</span>
                     </>
                   ) : (
-                    'Rengi Oluştur & Bağla'
+                    <>
+                      <Check size={15} />
+                      <span>Rengi Oluştur & Bağla</span>
+                    </>
                   )}
                 </button>
               </div>

@@ -163,15 +163,19 @@ export async function publishProductToDefaultSalesChannels(
       };
     }
 
-    // Read-back verification
-    const verification = await verifyProductPublications(productId);
+    const targetIds = targets.map((t) => t.id);
+
+    // Read-back verification with eventual consistency retry
+    const verification = await verifyProductPublicationsWithRetry(productId, targetIds, 4);
+
+    const isSuccess = verification.isPublished || verification.actualCount > 0;
 
     return {
-      success: verification.actualCount > 0,
+      success: isSuccess,
       expectedCount: targets.length,
       actualCount: verification.actualCount,
       channels: verification.channels,
-      publicationIds: targets.map((t) => t.id),
+      publicationIds: targetIds,
     };
   } catch (err) {
     console.error('publishProductToDefaultSalesChannels error:', err);
@@ -190,6 +194,65 @@ export async function publishProductToDefaultSalesChannels(
  */
 export async function publishProductToOnlineStore(productId: string) {
   return publishProductToDefaultSalesChannels(productId);
+}
+
+/**
+ * Sleep helper for retry backoff
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Read-back verification of all published channels for a product with eventual consistency retry
+ * Progressive delays: 0ms (immediate), 400ms, 1000ms, 2000ms.
+ */
+export async function verifyProductPublicationsWithRetry(
+  productId: string,
+  expectedTargetIds: string[] = [],
+  maxAttempts = 4
+): Promise<{
+  isPublished: boolean;
+  actualCount: number;
+  channels: Array<{ id: string; name: string; isPublished: boolean }>;
+}> {
+  const retryDelays = [0, 400, 1000, 2000];
+  let lastResult = {
+    isPublished: false,
+    actualCount: 0,
+    channels: [] as Array<{ id: string; name: string; isPublished: boolean }>,
+  };
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const delay = retryDelays[attempt] ?? 1000;
+    if (delay > 0) {
+      await sleep(delay);
+    }
+
+    lastResult = await verifyProductPublications(productId);
+
+    const publishedIds = lastResult.channels
+      .filter((c) => c.isPublished && c.id)
+      .map((c) => c.id);
+
+    const hasAllTargets =
+      expectedTargetIds.length > 0 &&
+      expectedTargetIds.every((tid) => publishedIds.includes(tid));
+
+    if (hasAllTargets || lastResult.actualCount >= (expectedTargetIds.length || 2)) {
+      return {
+        ...lastResult,
+        isPublished: true,
+      };
+    }
+
+    // If at least one channel is confirmed published after early attempts
+    if (lastResult.isPublished && attempt >= 1) {
+      return lastResult;
+    }
+  }
+
+  return lastResult;
 }
 
 /**

@@ -265,10 +265,10 @@ export function ProductForm() {
         </div>
 
         <h2 className="heading-xl" style={{ fontSize: 24, marginBottom: 8 }}>
-          Ürün Shopify&apos;a Eklendi
+          Ürün Shopify&apos;a Eklendi ve Yayınlandı
         </h2>
         <p className="text-muted" style={{ marginBottom: 20, fontSize: 14 }}>
-          <strong>{createdProductResult.title}</strong> ürünü mağazanıza başarıyla yüklendi, stok ve şablon ayarları tamamlandı.
+          <strong>{createdProductResult.title}</strong> ürünü mağazanıza başarıyla yüklendi, stok, şablon ve satış kanalı ayarları tamamlandı.
         </p>
 
         {createdProductResult.publicationWarning ? (
@@ -302,7 +302,7 @@ export function ProductForm() {
               gap: 6,
             }}
           >
-            ✓ Online Store ve Point of Sale kanallarında aktif (Kanallar: 2)
+            ✓ Online Store ve Point of Sale kanallarında aktif olarak yayınlandı
           </div>
         )}
 
