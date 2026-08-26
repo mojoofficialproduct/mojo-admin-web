@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ColorPicker } from './ColorPicker';
 import { ImageUploader, LocalImageItem } from './ImageUploader';
@@ -22,6 +22,7 @@ import {
   Bold,
   Italic,
   List,
+  FolderPlus,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -34,9 +35,28 @@ export function ProductForm() {
   // Basic Info State
   const [modelTitle, setModelTitle] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(getDefaultMojoCategory().id);
+  const [collectionsList, setCollectionsList] = useState<Array<{ id: string; title: string; handle: string }>>([]);
+  const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
   const [selectedColor, setSelectedColor] = useState('Siyah');
   const [customColorHex, setCustomColorHex] = useState('');
   const [description, setDescription] = useState('');
+
+  useEffect(() => {
+    async function loadCollections() {
+      try {
+        const res = await fetch('/api/collections');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.collections) {
+            setCollectionsList(data.collections);
+          }
+        }
+      } catch (err) {
+        console.warn('Koleksiyonlar yüklenemedi:', err);
+      }
+    }
+    loadCollections();
+  }, []);
 
   // Pricing & Stock
   const [price, setPrice] = useState('');
@@ -186,6 +206,13 @@ export function ProductForm() {
         formData.append('seoDescription', seoDescription.trim());
       }
 
+      if (selectedCollectionIds.length > 0) {
+        selectedCollectionIds.forEach((cid) => {
+          formData.append('collectionIds', cid);
+        });
+        formData.append('collectionIdsJson', JSON.stringify(selectedCollectionIds));
+      }
+
       // Append binary files
       images.forEach((item) => {
         formData.append('images', item.file);
@@ -223,6 +250,7 @@ export function ProductForm() {
   const handleResetForm = () => {
     setModelTitle('');
     setSelectedCategoryId(getDefaultMojoCategory().id);
+    setSelectedCollectionIds([]);
     setSelectedColor('Siyah');
     setCustomColorHex('');
     setPrice('');
@@ -418,6 +446,71 @@ export function ProductForm() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Collections (Homepage & Custom Collections) */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label className="label" style={{ marginBottom: 0 }}>
+                  Koleksiyonlar (Anasayfa & Kategori Listeleri)
+                </label>
+                <span style={{ fontSize: 11, color: '#6B7280' }}>
+                  {selectedCollectionIds.length} koleksiyon seçildi
+                </span>
+              </div>
+              
+              {collectionsList.length > 0 ? (
+                <div
+                  style={{
+                    maxHeight: 140,
+                    overflowY: 'auto',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '8px 12px',
+                    backgroundColor: '#FFFFFF',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  {collectionsList.map((col) => {
+                    const isChecked = selectedCollectionIds.includes(col.id);
+                    return (
+                      <label
+                        key={col.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                          padding: '2px 0',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCollectionIds((prev) => [...prev, col.id]);
+                            } else {
+                              setSelectedCollectionIds((prev) => prev.filter((id) => id !== col.id));
+                            }
+                          }}
+                          style={{ width: 16, height: 16 }}
+                        />
+                        <span style={{ fontWeight: isChecked ? 600 : 400, color: isChecked ? '#111827' : '#374151' }}>
+                          {col.title}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#9CA3AF', fontStyle: 'italic', padding: '6px 0' }}>
+                  Koleksiyon listesi yükleniyor...
+                </div>
+              )}
             </div>
 
             {/* Description with Quick Helpers */}

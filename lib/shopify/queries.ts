@@ -94,6 +94,13 @@ export const GET_PRODUCT_QUERY = /* GraphQL */ `
         name
         fullName
       }
+      collections(first: 20) {
+        nodes {
+          id
+          title
+          handle
+        }
+      }
       updatedAt
       totalInventory
       featuredImage {
@@ -242,6 +249,21 @@ export const COLLECTIONS_QUERY = /* GraphQL */ `
         productsCount {
           count
         }
+      }
+    }
+  }
+`;
+
+export const COLLECTION_ADD_PRODUCTS_MUTATION = /* GraphQL */ `
+  mutation CollectionAddProducts($id: ID!, $productIds: [ID!]!) {
+    collectionAddProducts(id: $id, productIds: $productIds) {
+      collection {
+        id
+        title
+      }
+      userErrors {
+        field
+        message
       }
     }
   }

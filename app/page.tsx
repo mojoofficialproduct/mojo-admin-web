@@ -88,7 +88,7 @@ export default function HomePage() {
 
             <div>
               <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
-                + Yeni Ürün Ekle
+                Yeni Ürün Ekle
               </div>
               <div style={{ fontSize: 13, color: '#A1A1AA' }}>
                 Kategori, renk, fiyat, stok ve görselleriyle yeni ürün oluşturun.

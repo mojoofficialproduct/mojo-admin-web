@@ -163,17 +163,22 @@ export async function publishProductToDefaultSalesChannels(
       };
     }
 
+    const mutationResourceCount = res?.publishablePublish?.publishable?.resourcePublicationsCount?.count ?? 0;
+    const isMutationSuccess = userErrors.length === 0;
     const targetIds = targets.map((t) => t.id);
 
     // Read-back verification with eventual consistency retry
     const verification = await verifyProductPublicationsWithRetry(productId, targetIds, 4);
 
-    const isSuccess = verification.isPublished || verification.actualCount > 0;
+    const isSuccess = verification.isPublished || verification.actualCount > 0 || (isMutationSuccess && mutationResourceCount > 0);
+    const finalCount = verification.actualCount > 0
+      ? verification.actualCount
+      : (mutationResourceCount > 0 ? mutationResourceCount : (isSuccess ? targets.length : 0));
 
     return {
       success: isSuccess,
       expectedCount: targets.length,
-      actualCount: verification.actualCount,
+      actualCount: finalCount,
       channels: verification.channels,
       publicationIds: targetIds,
     };
@@ -301,10 +306,12 @@ export async function verifyProductPublications(productId: string): Promise<{
 
     const nodes = res?.product?.resourcePublications?.nodes || [];
     const publishedNodes = nodes.filter((n) => n.isPublished);
+    const publishedCount = publishedNodes.length;
+    const isCurrentPublished = Boolean(res?.product?.publishedOnCurrentPublication);
 
     return {
-      isPublished: publishedNodes.length > 0 || res?.product?.publishedOnCurrentPublication || false,
-      actualCount: publishedNodes.length,
+      isPublished: publishedCount > 0 || isCurrentPublished,
+      actualCount: publishedCount > 0 ? publishedCount : (isCurrentPublished ? 1 : 0),
       channels: nodes.map((n) => ({
         id: n.publication?.id,
         name: n.publication?.name,

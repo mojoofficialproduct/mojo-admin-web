@@ -44,6 +44,8 @@ export default function ProductDetailPage({
   // Edit Mode State
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [collectionsList, setCollectionsList] = useState<Array<{ id: string; title: string; handle: string }>>([]);
+  const [editCollectionIds, setEditCollectionIds] = useState<string[]>([]);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editCategory, setEditCategory] = useState(getDefaultMojoCategory().id);
@@ -60,6 +62,7 @@ export default function ProductDetailPage({
     title: string;
     description: string;
     category: string;
+    collectionIds: string[];
     price: string;
     compareAtPrice: string;
     stock: string;
@@ -71,6 +74,7 @@ export default function ProductDetailPage({
     title: '',
     description: '',
     category: getDefaultMojoCategory().id,
+    collectionIds: [],
     price: '',
     compareAtPrice: '',
     stock: '0',
@@ -91,6 +95,7 @@ export default function ProductDetailPage({
   const [colorBarcode, setColorBarcode] = useState('');
   const [colorDescription, setColorDescription] = useState('');
   const [colorCategory, setColorCategory] = useState(getDefaultMojoCategory().id);
+  const [colorCollectionIds, setColorCollectionIds] = useState<string[]>([]);
   const [colorProductType, setColorProductType] = useState('Çanta');
   const [colorTags, setColorTags] = useState('çanta, kadın');
   const [colorWeight, setColorWeight] = useState('');
@@ -109,6 +114,17 @@ export default function ProductDetailPage({
       const p = data.product;
       setProduct(p);
 
+      try {
+        const colRes = await fetch('/api/collections');
+        if (colRes.ok) {
+          const colData = await colRes.json();
+          if (colData.collections) setCollectionsList(colData.collections);
+        }
+      } catch (colErr) {
+        console.warn('Koleksiyonlar yüklenemedi:', colErr);
+      }
+
+      const prodColIds: string[] = p?.collections?.nodes?.map((c: { id: string }) => c.id) || [];
       const firstVar = p?.variants?.nodes?.[0];
       const initialPrice = firstVar?.price || '';
       const initialCompareAt = firstVar?.compareAtPrice || '';
@@ -124,6 +140,7 @@ export default function ProductDetailPage({
       setEditTitle(initialTitle);
       setEditDescription(initialDesc);
       setEditCategory(initialCat);
+      setEditCollectionIds(prodColIds);
       setEditPrice(initialPrice);
       setEditCompareAtPrice(initialCompareAt);
       setEditStock(initialStock);
@@ -136,6 +153,7 @@ export default function ProductDetailPage({
         title: initialTitle,
         description: initialDesc,
         category: initialCat,
+        collectionIds: prodColIds,
         price: initialPrice,
         compareAtPrice: initialCompareAt,
         stock: initialStock,
@@ -148,6 +166,7 @@ export default function ProductDetailPage({
       setColorPrice(initialPrice);
       setColorCompareAtPrice(initialCompareAt);
       setColorCategory(initialCat);
+      setColorCollectionIds(prodColIds);
       setColorProductType(p?.productType || 'Çanta');
       setColorDescription(initialDesc);
       setColorTags(initialTags);
@@ -175,7 +194,8 @@ export default function ProductDetailPage({
     editSku !== initialEditValues.sku ||
     editBarcode !== initialEditValues.barcode ||
     editTags !== initialEditValues.tags ||
-    editStatus !== initialEditValues.status;
+    editStatus !== initialEditValues.status ||
+    JSON.stringify(editCollectionIds.slice().sort()) !== JSON.stringify(initialEditValues.collectionIds.slice().sort());
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,6 +210,7 @@ export default function ProductDetailPage({
           title: editTitle.trim(),
           descriptionHtml: editDescription.trim() ? `<p>${editDescription.trim().replace(/\n/g, '<br/>')}</p>` : '',
           categoryId: editCategory,
+          collectionIds: editCollectionIds,
           price: editPrice.trim().replace(',', '.'),
           compareAtPrice: editCompareAtPrice.trim() ? editCompareAtPrice.trim().replace(',', '.') : undefined,
           quantity: editStock.trim() || '0',
@@ -246,6 +267,8 @@ export default function ProductDetailPage({
     if (product.totalInventory !== undefined) setColorStock(String(product.totalInventory));
     if (product.descriptionHtml) setColorDescription(product.descriptionHtml.replace(/<[^>]*>?/gm, ''));
     if (product.category?.id) setColorCategory(product.category.id);
+    const prodColIds: string[] = product?.collections?.nodes?.map((c: { id: string }) => c.id) || [];
+    setColorCollectionIds(prodColIds);
     if (product.productType) setColorProductType(product.productType);
     if (product.tags) setColorTags(Array.isArray(product.tags) ? product.tags.join(', ') : String(product.tags));
     if (firstVar?.barcode) setColorBarcode(firstVar.barcode);
@@ -260,6 +283,8 @@ export default function ProductDetailPage({
       if (firstVar?.price) setColorPrice(firstVar.price);
       if (firstVar?.compareAtPrice) setColorCompareAtPrice(firstVar.compareAtPrice);
       if (product.category?.id) setColorCategory(product.category.id);
+      const prodColIds: string[] = product?.collections?.nodes?.map((c: { id: string }) => c.id) || [];
+      setColorCollectionIds(prodColIds);
       if (product.productType) setColorProductType(product.productType);
       if (product.descriptionHtml) setColorDescription(product.descriptionHtml.replace(/<[^>]*>?/gm, ''));
       if (product.tags) setColorTags(Array.isArray(product.tags) ? product.tags.join(', ') : String(product.tags));
@@ -320,6 +345,12 @@ export default function ProductDetailPage({
       }
       if (colorCategory) {
         formData.append('categoryId', colorCategory);
+      }
+      if (colorCollectionIds.length > 0) {
+        colorCollectionIds.forEach((cid) => {
+          formData.append('collectionIds', cid);
+        });
+        formData.append('collectionIdsJson', JSON.stringify(colorCollectionIds));
       }
       if (colorProductType.trim()) {
         formData.append('productType', colorProductType.trim());
@@ -565,6 +596,70 @@ export default function ProductDetailPage({
                 className="input-field"
                 style={{ resize: 'vertical' }}
               />
+            </div>
+
+            {/* Collections Selector */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label className="label" style={{ marginBottom: 0 }}>
+                  Koleksiyonlar (Anasayfa & Kategori Listeleri)
+                </label>
+                <span style={{ fontSize: 11, color: '#6B7280' }}>
+                  {editCollectionIds.length} koleksiyon seçildi
+                </span>
+              </div>
+              {collectionsList.length > 0 ? (
+                <div
+                  style={{
+                    maxHeight: 120,
+                    overflowY: 'auto',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '8px 12px',
+                    backgroundColor: '#FFFFFF',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  {collectionsList.map((col) => {
+                    const isChecked = editCollectionIds.includes(col.id);
+                    return (
+                      <label
+                        key={col.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                          padding: '2px 0',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEditCollectionIds((prev) => [...prev, col.id]);
+                            } else {
+                              setEditCollectionIds((prev) => prev.filter((id) => id !== col.id));
+                            }
+                          }}
+                          style={{ width: 16, height: 16 }}
+                        />
+                        <span style={{ fontWeight: isChecked ? 600 : 400, color: isChecked ? '#111827' : '#374151' }}>
+                          {col.title}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' }}>
+                  Koleksiyonlar yükleniyor...
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
@@ -833,7 +928,7 @@ export default function ProductDetailPage({
                   fontSize: 13,
                 }}
               >
-                Bu model şu anda tek renklidir. &quot;+ Yeni Renk Ekle&quot; butonuna basarak kardeş renk varyantları oluşturabilirsiniz.
+                Bu model şu anda tek renklidir. &quot;Yeni Renk Ekle&quot; butonuna basarak kardeş renk varyantları oluşturabilirsiniz.
               </div>
             )}
           </div>
@@ -1091,6 +1186,70 @@ export default function ProductDetailPage({
                     className="input-field"
                   />
                 </div>
+              </div>
+
+              {/* Collections Selector in Modal */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label className="label" style={{ marginBottom: 0 }}>
+                    Koleksiyonlar (Kaynak Üründen Ön Tanımlı)
+                  </label>
+                  <span style={{ fontSize: 11, color: '#6B7280' }}>
+                    {colorCollectionIds.length} koleksiyon seçildi
+                  </span>
+                </div>
+                {collectionsList.length > 0 ? (
+                  <div
+                    style={{
+                      maxHeight: 110,
+                      overflowY: 'auto',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '8px 12px',
+                      backgroundColor: '#FFFFFF',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                    }}
+                  >
+                    {collectionsList.map((col) => {
+                      const isChecked = colorCollectionIds.includes(col.id);
+                      return (
+                        <label
+                          key={col.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            fontSize: 13,
+                            cursor: 'pointer',
+                            padding: '2px 0',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setColorCollectionIds((prev) => [...prev, col.id]);
+                              } else {
+                                setColorCollectionIds((prev) => prev.filter((id) => id !== col.id));
+                              }
+                            }}
+                            style={{ width: 16, height: 16 }}
+                          />
+                          <span style={{ fontWeight: isChecked ? 600 : 400, color: isChecked ? '#111827' : '#374151' }}>
+                            {col.title}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' }}>
+                    Koleksiyonlar yükleniyor...
+                  </div>
+                )}
               </div>
 
               {/* SKU & Barcode & Weight */}

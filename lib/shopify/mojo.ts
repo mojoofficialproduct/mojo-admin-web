@@ -33,9 +33,10 @@ export const COLOR_SWATCHES: Record<string, string> = {
   Turuncu: '#FFA500',
   Altın: '#D4AF37',
   Gümüş: '#C0C0C0',
+  Camel: '#C19A6B',
 };
 
-// 21 standard colors required by section 14 of the prompt + brand extensions
+// 22 standard colors required by prompt + brand extensions
 export const MOJO_COLOR_PALETTE = [
   'Siyah',
   'Beyaz',
@@ -58,6 +59,7 @@ export const MOJO_COLOR_PALETTE = [
   'Mor',
   'Sarı',
   'Turuncu',
+  'Camel',
 ];
 
 export const THEME_SUPPORTED_COLORS = [
@@ -81,6 +83,11 @@ export const THEME_SUPPORTED_COLORS = [
   'Pembe',
   'Mavi',
   'Lacivert',
+  'Sarı',
+  'Turuncu',
+  'Mor',
+  'Camel',
+  'Antrasit',
 ];
 
 export const THEME_SWATCH_COLLECTIONS: Record<string, string> = {
@@ -243,13 +250,26 @@ export async function syncSiblingColorProductReferences(
     return { success: true, updatedCount: 0 };
   }
 
-  const orderedProductIds = siblingProducts.map((p) =>
+  const seenIds = new Set<string>();
+  const validSiblings = siblingProducts.filter((s) => {
+    if (!s || !s.id) return false;
+    const norm = String(s.id).startsWith('gid://') ? s.id : `gid://shopify/Product/${s.id}`;
+    if (seenIds.has(norm)) return false;
+    seenIds.add(norm);
+    return true;
+  });
+
+  if (validSiblings.length === 0) {
+    return { success: true, updatedCount: 0 };
+  }
+
+  const orderedProductIds = validSiblings.map((p) =>
     String(p.id).startsWith('gid://') ? p.id : `gid://shopify/Product/${p.id}`
   );
   const primaryProductId = orderedProductIds[0];
   const listJsonValue = JSON.stringify(orderedProductIds);
 
-  const updates = siblingProducts.map(async (sibling, index) => {
+  const updates = validSiblings.map(async (sibling, index) => {
     const sId = String(sibling.id).startsWith('gid://') ? sibling.id : `gid://shopify/Product/${sibling.id}`;
     const parsed = parseMojoProductTitle(
       sibling.title || '',

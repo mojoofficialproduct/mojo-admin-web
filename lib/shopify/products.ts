@@ -19,6 +19,7 @@ import {
 import { fetchLocations, setInventoryQuantity } from './inventory';
 import { publishProductToDefaultSalesChannels, PublicationResult } from './publications';
 import { uploadAndAttachProductImages, ImageUploadItem } from './media';
+import { addProductToCollections } from './collections';
 
 export interface ProductSummary {
   id: string;
@@ -62,6 +63,7 @@ export interface CreateProductInput {
   status?: 'ACTIVE' | 'DRAFT';
   locationId?: string;
   categoryId?: string;
+  collectionIds?: string[];
   vendor?: string;
   productType?: string;
   tags?: string[] | string;
@@ -77,6 +79,7 @@ export interface UpdateProductInput {
   title?: string;
   descriptionHtml?: string;
   categoryId?: string;
+  collectionIds?: string[];
   status?: 'ACTIVE' | 'DRAFT';
   vendor?: string;
   productType?: string;
@@ -531,6 +534,15 @@ export async function createMojoProduct(
     }
   }
 
+  // 6.5 Assign to Collections if specified
+  if (input.collectionIds && input.collectionIds.length > 0) {
+    try {
+      await addProductToCollections(createdProduct.id, input.collectionIds);
+    } catch (colErr) {
+      console.warn('Koleksiyon atama uyarısı:', colErr);
+    }
+  }
+
   // 7. Publish to Default Sales Channels (Online Store + POS)
   let publicationDetails: PublicationResult | undefined = undefined;
   if (status === 'ACTIVE') {
@@ -540,7 +552,8 @@ export async function createMojoProduct(
     }
   }
 
-  const isPublished = Boolean(publicationDetails && publicationDetails.actualCount > 0);
+  const isPublished = Boolean(publicationDetails && (publicationDetails.success || publicationDetails.actualCount > 0));
+  const isFailed = status === 'ACTIVE' && Boolean(publicationDetails && !publicationDetails.success && publicationDetails.actualCount === 0);
 
   // 8. Self-initialize sibling list
   const primaryId = createdProduct.id;
@@ -561,10 +574,9 @@ export async function createMojoProduct(
   return {
     success: true,
     publicationSuccess: isPublished,
-    publicationWarning:
-      status === 'ACTIVE' && (!publicationDetails || publicationDetails.actualCount === 0)
-        ? 'Ürün oluşturuldu ancak satış kanallarına (Online Store / POS) yayınlanamadı.'
-        : undefined,
+    publicationWarning: isFailed
+      ? 'Ürün oluşturuldu ancak satış kanallarına (Online Store / POS) yayınlanamadı.'
+      : undefined,
     publication: publicationDetails,
     product: {
       id: createdProduct.id,
@@ -601,6 +613,7 @@ export interface AddSiblingColorOptions {
   barcode?: string;
   descriptionHtml?: string;
   categoryId?: string;
+  collectionIds?: string[];
   productType?: string;
   tags?: string[] | string;
   weight?: number | string;
@@ -641,6 +654,8 @@ export async function addSiblingColorProduct(
   const descriptionHtml =
     options.descriptionHtml !== undefined ? options.descriptionHtml : sourceProduct.descriptionHtml || '';
   const categoryId = options.categoryId || sourceProduct.category?.id;
+  const sourceCollections = (sourceProduct as any)?.collections?.nodes?.map((c: any) => c.id) || [];
+  const targetCollectionIds = options.collectionIds !== undefined ? options.collectionIds : sourceCollections;
   const productType =
     options.productType !== undefined && String(options.productType).trim() !== ''
       ? options.productType
@@ -661,6 +676,7 @@ export async function addSiblingColorProduct(
       descriptionHtml,
       status,
       categoryId,
+      collectionIds: targetCollectionIds,
       productType,
       tags,
       weight: options.weight,
@@ -702,10 +718,34 @@ export async function addSiblingColorProduct(
 }
 
 /**
- * Delete a product permanently
+ * Delete a product permanently with self-healing primary promotion
  */
 export async function deleteProduct(productId: string): Promise<boolean> {
   const fullId = productId.startsWith('gid://') ? productId : `gid://shopify/Product/${productId}`;
+
+  try {
+    const currentProduct = await fetchProductById(productId);
+    const existingSiblings: SiblingProductInput[] =
+      currentProduct?.customColorProductsMetafield?.references?.nodes || [];
+
+    const survivingSiblings = existingSiblings.filter((s) => {
+      const sId = String(s.id).startsWith('gid://') ? s.id : `gid://shopify/Product/${s.id}`;
+      return sId !== fullId;
+    });
+
+    if (survivingSiblings.length > 0) {
+      const parsed = parseMojoProductTitle(currentProduct?.title || '');
+      const modelTitle = currentProduct?.customModelTitleMetafield?.value || parsed.modelTitle;
+      const groupId = currentProduct?.customGroupIdMetafield?.value || parsed.modelTitle;
+
+      await syncSiblingColorProductReferences(survivingSiblings, {
+        modelTitle,
+        groupId,
+      });
+    }
+  } catch (err) {
+    console.warn('Silme öncesi kardeş ürün senkronizasyon uyarısı:', err);
+  }
 
   const res = await executeShopifyGraphQL<{
     productDelete: {
@@ -785,6 +825,15 @@ export async function updateMojoProduct(
     const userErrors = updateRes?.productUpdate?.userErrors || [];
     if (userErrors.length > 0) {
       return { success: false, error: normalizeGraphQLError({ userErrors }, 'Ürün güncellenemedi.') };
+    }
+  }
+
+  // 1.5 Update Collection Memberships if provided
+  if (input.collectionIds && input.collectionIds.length > 0) {
+    try {
+      await addProductToCollections(fullProductId, input.collectionIds);
+    } catch (colErr) {
+      console.warn('Koleksiyon güncelleme uyarısı:', colErr);
     }
   }
 

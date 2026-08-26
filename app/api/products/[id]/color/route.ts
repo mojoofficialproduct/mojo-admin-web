@@ -25,6 +25,7 @@ export async function POST(
     let weightUnit = 'KILOGRAMS';
     let status: 'ACTIVE' | 'DRAFT' = 'ACTIVE';
     let requiresShipping = true;
+    let collectionIds: string[] | undefined = undefined;
     const imageItems: ImageUploadItem[] = [];
 
     if (contentType.includes('multipart/form-data')) {
@@ -44,6 +45,17 @@ export async function POST(
       weightUnit = String(formData.get('weightUnit') || 'KILOGRAMS').trim();
       status = (formData.get('status') as 'ACTIVE' | 'DRAFT') || 'ACTIVE';
       requiresShipping = formData.get('requiresShipping') !== 'false';
+
+      const collectionIdsRaw = formData.getAll('collectionIds') as string[];
+      const collectionIdsJson = formData.get('collectionIdsJson') as string;
+      if (collectionIdsRaw.length > 0) {
+        collectionIds = collectionIdsRaw.map(String).filter(Boolean);
+      } else if (collectionIdsJson) {
+        try {
+          const parsed = JSON.parse(collectionIdsJson);
+          if (Array.isArray(parsed)) collectionIds = parsed;
+        } catch {}
+      }
 
       const imageFiles = formData.getAll('images') as File[];
       for (const file of imageFiles) {
@@ -68,6 +80,7 @@ export async function POST(
       barcode = String(body.barcode || '').trim();
       descriptionHtml = String(body.descriptionHtml || '').trim();
       categoryId = String(body.categoryId || '').trim();
+      collectionIds = Array.isArray(body.collectionIds) ? body.collectionIds : undefined;
       productType = String(body.productType || '').trim();
       tags = String(body.tags || '').trim();
       weight = String(body.weight || '').trim();
@@ -96,6 +109,7 @@ export async function POST(
       barcode: barcode || undefined,
       descriptionHtml: descriptionHtml || undefined,
       categoryId: categoryId || undefined,
+      collectionIds,
       productType: productType || undefined,
       tags: tags || undefined,
       weight: weight || undefined,

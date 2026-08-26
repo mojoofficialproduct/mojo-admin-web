@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
     let handle = '';
     let seoTitle = '';
     let seoDescription = '';
+    let collectionIds: string[] = [];
     const imageItems: ImageUploadItem[] = [];
 
     if (contentType.includes('multipart/form-data')) {
@@ -76,6 +77,16 @@ export async function POST(request: NextRequest) {
       handle = String(formData.get('handle') || '').trim();
       seoTitle = String(formData.get('seoTitle') || '').trim();
       seoDescription = String(formData.get('seoDescription') || '').trim();
+
+      const collectionIdsRaw = formData.getAll('collectionIds') as string[];
+      const collectionIdsJson = formData.get('collectionIdsJson') as string;
+      collectionIds = collectionIdsRaw.map(String).filter(Boolean);
+      if (collectionIds.length === 0 && collectionIdsJson) {
+        try {
+          const parsed = JSON.parse(collectionIdsJson);
+          if (Array.isArray(parsed)) collectionIds = parsed;
+        } catch {}
+      }
 
       const imageFiles = formData.getAll('images') as File[];
       for (const file of imageFiles) {
@@ -103,6 +114,7 @@ export async function POST(request: NextRequest) {
       status = body.status === 'DRAFT' ? 'DRAFT' : 'ACTIVE';
       locationId = String(body.locationId || '').trim();
       categoryId = String(body.categoryId || '').trim();
+      collectionIds = Array.isArray(body.collectionIds) ? body.collectionIds : [];
       vendor = String(body.vendor || 'MOJO').trim();
       productType = String(body.productType || '').trim();
       tags = String(body.tags || '').trim();
@@ -135,6 +147,7 @@ export async function POST(request: NextRequest) {
         status,
         locationId,
         categoryId,
+        collectionIds,
         vendor,
         productType,
         tags,

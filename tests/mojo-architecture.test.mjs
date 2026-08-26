@@ -41,6 +41,12 @@ test('getColorSwatch returns accurate hex codes for preset and theme colors', ()
   assert.equal(getColorSwatch('krem'), '#EAE3D6');
   assert.equal(getColorSwatch('Taba'), '#B85A2B');
   assert.equal(getColorSwatch('Kırmızı'), '#F61F1F');
+  assert.equal(getColorSwatch('Sarı'), '#FFD700', 'Yellow swatch must return #FFD700');
+  assert.equal(getColorSwatch('sarı'), '#FFD700');
+  assert.equal(getColorSwatch('Turuncu'), '#FFA500');
+  assert.equal(getColorSwatch('Mor'), '#800080');
+  assert.equal(getColorSwatch('Camel'), '#C19A6B');
+  assert.equal(getColorSwatch('Antrasit'), '#383E42');
   assert.equal(getColorSwatch('BilinmeyenRenk'), '#CCCCCC');
 });
 
@@ -527,6 +533,130 @@ test('UI Regression: Product detail page button contains single plus sign', asyn
 
   assert.equal(content.includes('+ + Yeni Renk Ekle'), false, 'Must not contain double plus icon');
   assert.ok(content.includes('<span>Yeni Renk Ekle</span>') || content.includes('>Yeni Renk Ekle<'));
+});
+
+test('Collection helper: fetchCollections and addProductToCollections with mock GraphQL', async () => {
+  const { fetchCollections, addProductToCollections } = await import('../lib/shopify/collections.ts');
+  const originalFetch = globalThis.fetch;
+  let addedToCol = '';
+
+  globalThis.fetch = (async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('GetCollections')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            collections: {
+              nodes: [
+                { id: 'gid://shopify/Collection/101', title: 'Pristine 3 Gözlü', handle: 'pristine-3-gozlu' },
+                { id: 'gid://shopify/Collection/102', title: 'Mojo Askılı', handle: 'mojo-askili' },
+              ],
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('CollectionAddProducts')) {
+      const parsed = JSON.parse(bodyStr);
+      addedToCol = parsed.variables?.id;
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            collectionAddProducts: {
+              collection: { id: addedToCol, title: 'Test Collection' },
+              userErrors: [],
+            },
+          },
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  });
+
+  try {
+    const cols = await fetchCollections();
+    assert.equal(cols.length, 2);
+    assert.equal(cols[0].title, 'Pristine 3 Gözlü');
+
+    const addRes = await addProductToCollections('gid://shopify/Product/999', ['101', '102']);
+    assert.equal(addRes.success, true);
+    assert.equal(addRes.addedCount, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Delete Product: self-heals by promoting surviving sibling when primary is deleted', async () => {
+  const { deleteProduct } = await import('../lib/shopify/products.ts');
+  const originalFetch = globalThis.fetch;
+  let deletedId = '';
+  let updatedSiblingPayloads = [];
+
+  globalThis.fetch = (async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('GetProduct')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            product: {
+              id: 'gid://shopify/Product/1001',
+              title: 'Luna Çanta - Siyah',
+              customColorProductsMetafield: {
+                references: {
+                  nodes: [
+                    { id: 'gid://shopify/Product/1001', title: 'Luna Çanta - Siyah' },
+                    { id: 'gid://shopify/Product/1002', title: 'Luna Çanta - Bordo' },
+                  ],
+                },
+              },
+              customPrimaryProductMetafield: { reference: { id: 'gid://shopify/Product/1001' } },
+              customModelTitleMetafield: { value: 'Luna Çanta' },
+              customGroupIdMetafield: { value: 'grp_luna' },
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('productUpdate')) {
+      const parsed = JSON.parse(bodyStr);
+      updatedSiblingPayloads.push(parsed.variables?.product);
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productUpdate: { product: { id: 'gid://shopify/Product/1002' }, userErrors: [] },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('ProductDelete')) {
+      const parsed = JSON.parse(bodyStr);
+      deletedId = parsed.variables?.input?.id;
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productDelete: { deletedProductId: deletedId, userErrors: [] },
+          },
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  });
+
+  try {
+    const res = await deleteProduct('gid://shopify/Product/1001');
+    assert.equal(res, true);
+    assert.equal(deletedId, 'gid://shopify/Product/1001');
+    // Surviving sibling 1002 should have been synchronized as new primary
+    assert.equal(updatedSiblingPayloads.length, 1);
+    assert.equal(updatedSiblingPayloads[0].id, 'gid://shopify/Product/1002');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 
