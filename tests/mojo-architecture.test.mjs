@@ -717,4 +717,113 @@ test('P0 Bug Fix: syncSiblingColorProductReferences MUST NOT include templateSuf
   }
 });
 
+test('Regression Test: custom.mojo_product_features MUST use multi_line_text_field in create and update mutations', async () => {
+  const { createMojoProduct, updateMojoProduct } = await import('../lib/shopify/products.ts');
+  const originalFetch = globalThis.fetch;
+  let createPayload = null;
+  let updatePayload = null;
+
+  globalThis.fetch = (async (url, init) => {
+    const urlStr = String(url);
+    if (urlStr.includes('oauth/access_token')) {
+      return {
+        ok: true,
+        json: async () => ({ access_token: 'mock_token_123', scope: 'write_products', expires_in: 86400 }),
+      };
+    }
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('ProductCreate') || bodyStr.includes('productCreate')) {
+      const parsed = JSON.parse(bodyStr);
+      createPayload = parsed.variables?.product || parsed.variables?.input;
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productCreate: {
+              product: {
+                id: 'gid://shopify/Product/9999',
+                handle: 'test-product-siyah',
+                status: 'ACTIVE',
+                templateSuffix: 'mojo-dynamic',
+                variants: { nodes: [{ id: 'gid://shopify/ProductVariant/99991', price: '1299.00' }] },
+              },
+              userErrors: [],
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('ProductUpdate') || bodyStr.includes('productUpdate')) {
+      const parsed = JSON.parse(bodyStr);
+      updatePayload = parsed.variables?.product;
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productUpdate: { product: { id: parsed.variables?.product?.id }, userErrors: [] },
+          },
+        }),
+      };
+    }
+    if (
+      bodyStr.includes('ProductVariantsBulkUpdate') ||
+      bodyStr.includes('PublishProduct') ||
+      bodyStr.includes('VerifyProductPublications') ||
+      bodyStr.includes('GetOnlineStorePublications') ||
+      bodyStr.includes('publishablePublish')
+    ) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productVariantsBulkUpdate: { userErrors: [] },
+            publications: { nodes: [{ id: 'gid://shopify/Publication/1', name: 'Online Store', autoPublish: true }] },
+            publishablePublish: { userErrors: [] },
+            product: { id: 'gid://shopify/Product/9999', publishedOnCurrentPublication: true, resourcePublications: { nodes: [{ isPublished: true, publication: { id: 'gid://shopify/Publication/1', name: 'Online Store' } }] } },
+          },
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  });
+
+  try {
+    // 1. Test Create
+    const createRes = await createMojoProduct({
+      modelTitle: 'Test Çanta',
+      colorName: 'Siyah',
+      price: '1299',
+      productFeatures: 'Geniş iç hacimli, 3 bölmeli ve ayarlanabilir askılı çanta.',
+    });
+
+    assert.equal(createRes.success, true);
+    assert.ok(createPayload, 'productCreate mutation must have been called');
+    const createFeaturesMetafield = createPayload.metafields?.find((m) => m.key === 'mojo_product_features');
+    assert.ok(createFeaturesMetafield, 'mojo_product_features must be in create payload');
+    assert.equal(
+      createFeaturesMetafield.type,
+      'multi_line_text_field',
+      'mojo_product_features MUST have type multi_line_text_field in create'
+    );
+
+    // 2. Test Update
+    const updateRes = await updateMojoProduct('gid://shopify/Product/9999', {
+      productFeatures: 'Güncellenmiş ürün özellikleri açıklaması.',
+    });
+
+    assert.equal(updateRes.success, true);
+    assert.ok(updatePayload, 'productUpdate mutation must have been called');
+    const updateFeaturesMetafield = updatePayload.metafields?.find((m) => m.key === 'mojo_product_features');
+    assert.ok(updateFeaturesMetafield, 'mojo_product_features must be in update payload');
+    assert.equal(
+      updateFeaturesMetafield.type,
+      'multi_line_text_field',
+      'mojo_product_features MUST have type multi_line_text_field in update'
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
 

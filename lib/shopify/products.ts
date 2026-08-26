@@ -406,7 +406,7 @@ export async function createMojoProduct(
       namespace: 'custom',
       key: 'mojo_product_features',
       value: input.productFeatures.trim(),
-      type: 'rich_text_field',
+      type: 'multi_line_text_field',
     });
   }
 
@@ -839,7 +839,7 @@ export async function updateMojoProduct(
         namespace: 'custom',
         key: 'mojo_product_features',
         value: input.productFeatures.trim(),
-        type: 'rich_text_field',
+        type: 'multi_line_text_field',
       },
     ];
     hasProductUpdates = true;
