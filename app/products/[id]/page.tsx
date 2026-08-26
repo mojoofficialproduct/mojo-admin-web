@@ -48,6 +48,7 @@ export default function ProductDetailPage({
   const [editCollectionIds, setEditCollectionIds] = useState<string[]>([]);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editProductFeatures, setEditProductFeatures] = useState('');
   const [editCategory, setEditCategory] = useState(getDefaultMojoCategory().id);
   const [editPrice, setEditPrice] = useState('');
   const [editCompareAtPrice, setEditCompareAtPrice] = useState('');
@@ -61,6 +62,7 @@ export default function ProductDetailPage({
   const [initialEditValues, setInitialEditValues] = useState<{
     title: string;
     description: string;
+    productFeatures: string;
     category: string;
     collectionIds: string[];
     price: string;
@@ -73,6 +75,7 @@ export default function ProductDetailPage({
   }>({
     title: '',
     description: '',
+    productFeatures: '',
     category: getDefaultMojoCategory().id,
     collectionIds: [],
     price: '',
@@ -94,6 +97,7 @@ export default function ProductDetailPage({
   const [colorSku, setColorSku] = useState('');
   const [colorBarcode, setColorBarcode] = useState('');
   const [colorDescription, setColorDescription] = useState('');
+  const [colorProductFeatures, setColorProductFeatures] = useState('');
   const [colorCategory, setColorCategory] = useState(getDefaultMojoCategory().id);
   const [colorCollectionIds, setColorCollectionIds] = useState<string[]>([]);
   const [colorProductType, setColorProductType] = useState('Çanta');
@@ -136,9 +140,11 @@ export default function ProductDetailPage({
       const initialStock = p?.totalInventory !== undefined ? String(p.totalInventory) : '0';
       const initialStatus = (p?.status as 'ACTIVE' | 'DRAFT') || 'ACTIVE';
       const initialTags = p?.tags ? (Array.isArray(p.tags) ? p.tags.join(', ') : String(p.tags)) : '';
+      const initialFeatures = p?.customProductFeaturesMetafield?.value || '';
 
       setEditTitle(initialTitle);
       setEditDescription(initialDesc);
+      setEditProductFeatures(initialFeatures);
       setEditCategory(initialCat);
       setEditCollectionIds(prodColIds);
       setEditPrice(initialPrice);
@@ -152,6 +158,7 @@ export default function ProductDetailPage({
       setInitialEditValues({
         title: initialTitle,
         description: initialDesc,
+        productFeatures: initialFeatures,
         category: initialCat,
         collectionIds: prodColIds,
         price: initialPrice,
@@ -169,6 +176,7 @@ export default function ProductDetailPage({
       setColorCollectionIds(prodColIds);
       setColorProductType(p?.productType || 'Çanta');
       setColorDescription(initialDesc);
+      setColorProductFeatures(initialFeatures);
       setColorTags(initialTags);
       setColorStock(initialStock);
     } catch (err) {
@@ -187,6 +195,7 @@ export default function ProductDetailPage({
   const isEditDirty =
     editTitle !== initialEditValues.title ||
     editDescription !== initialEditValues.description ||
+    editProductFeatures !== initialEditValues.productFeatures ||
     editCategory !== initialEditValues.category ||
     editPrice !== initialEditValues.price ||
     editCompareAtPrice !== initialEditValues.compareAtPrice ||
@@ -209,6 +218,7 @@ export default function ProductDetailPage({
         body: JSON.stringify({
           title: editTitle.trim(),
           descriptionHtml: editDescription.trim() ? `<p>${editDescription.trim().replace(/\n/g, '<br/>')}</p>` : '',
+          productFeatures: editProductFeatures.trim(),
           categoryId: editCategory,
           collectionIds: editCollectionIds,
           price: editPrice.trim().replace(',', '.'),
@@ -266,6 +276,7 @@ export default function ProductDetailPage({
     if (firstVar?.compareAtPrice) setColorCompareAtPrice(firstVar.compareAtPrice);
     if (product.totalInventory !== undefined) setColorStock(String(product.totalInventory));
     if (product.descriptionHtml) setColorDescription(product.descriptionHtml.replace(/<[^>]*>?/gm, ''));
+    if (product.customProductFeaturesMetafield?.value) setColorProductFeatures(product.customProductFeaturesMetafield.value);
     if (product.category?.id) setColorCategory(product.category.id);
     const prodColIds: string[] = product?.collections?.nodes?.map((c: { id: string }) => c.id) || [];
     setColorCollectionIds(prodColIds);
@@ -287,6 +298,7 @@ export default function ProductDetailPage({
       setColorCollectionIds(prodColIds);
       if (product.productType) setColorProductType(product.productType);
       if (product.descriptionHtml) setColorDescription(product.descriptionHtml.replace(/<[^>]*>?/gm, ''));
+      if (product.customProductFeaturesMetafield?.value) setColorProductFeatures(product.customProductFeaturesMetafield.value);
       if (product.tags) setColorTags(Array.isArray(product.tags) ? product.tags.join(', ') : String(product.tags));
       if (product.totalInventory !== undefined) setColorStock(String(product.totalInventory));
       setColorSku('');
@@ -342,6 +354,9 @@ export default function ProductDetailPage({
           })
           .join('');
         formData.append('descriptionHtml', html || `<p>${colorDescription.trim()}</p>`);
+      }
+      if (colorProductFeatures.trim()) {
+        formData.append('productFeatures', colorProductFeatures.trim());
       }
       if (colorCategory) {
         formData.append('categoryId', colorCategory);
@@ -593,6 +608,23 @@ export default function ProductDetailPage({
                 rows={3}
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
+                className="input-field"
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <label className="label" style={{ marginBottom: 0 }}>
+                  Ürün Özellikleri (custom.mojo_product_features)
+                </label>
+                <span style={{ fontSize: 11, color: '#F61F1F', fontWeight: 600 }}>PDP Akordiyon / Teknik Özellikler</span>
+              </div>
+              <textarea
+                rows={3}
+                placeholder="Ölçüler, bölmeler, materyal bilgileri..."
+                value={editProductFeatures}
+                onChange={(e) => setEditProductFeatures(e.target.value)}
                 className="input-field"
                 style={{ resize: 'vertical' }}
               />
@@ -1322,6 +1354,24 @@ export default function ProductDetailPage({
                   placeholder="Ürün açıklaması..."
                   value={colorDescription}
                   onChange={(e) => setColorDescription(e.target.value)}
+                  className="input-field"
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Product Features */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <label className="label" style={{ marginBottom: 0 }}>
+                    Ürün Özellikleri (Kaynak Üründen Ön Tanımlı)
+                  </label>
+                  <span style={{ fontSize: 11, color: '#F61F1F', fontWeight: 600 }}>custom.mojo_product_features</span>
+                </div>
+                <textarea
+                  rows={3}
+                  placeholder="Kaynak üründen devralınan özellikler veya renge özel teknik detaylar..."
+                  value={colorProductFeatures}
+                  onChange={(e) => setColorProductFeatures(e.target.value)}
                   className="input-field"
                   style={{ resize: 'vertical' }}
                 />

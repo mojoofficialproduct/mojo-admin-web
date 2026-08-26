@@ -71,6 +71,9 @@ export const PRODUCTS_QUERY = /* GraphQL */ `
           customPrimaryProductMetafield: metafield(namespace: "custom", key: "mojo_primary_product") {
             value
           }
+          customProductFeaturesMetafield: metafield(namespace: "custom", key: "mojo_product_features") {
+            value
+          }
         }
       }
     }
@@ -219,6 +222,10 @@ export const GET_PRODUCT_QUERY = /* GraphQL */ `
         value
       }
       customSortIndexMetafield: metafield(namespace: "custom", key: "mojo_sort_index") {
+        id
+        value
+      }
+      customProductFeaturesMetafield: metafield(namespace: "custom", key: "mojo_product_features") {
         id
         value
       }

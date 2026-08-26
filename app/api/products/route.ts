@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     let quantity: string | number = '0';
     let sku = '';
     let descriptionHtml = '';
+    let productFeatures = '';
     let status: 'ACTIVE' | 'DRAFT' = 'ACTIVE';
     let locationId = '';
     let categoryId = '';
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
       sku = String(formData.get('sku') || '').trim();
       barcode = String(formData.get('barcode') || '').trim();
       descriptionHtml = String(formData.get('descriptionHtml') || '').trim();
+      productFeatures = String(formData.get('productFeatures') || '').trim();
       status = (formData.get('status') as 'ACTIVE' | 'DRAFT') || 'ACTIVE';
       locationId = String(formData.get('locationId') || '').trim();
       categoryId = String(formData.get('categoryId') || '').trim();
@@ -111,6 +113,7 @@ export async function POST(request: NextRequest) {
       sku = String(body.sku || '').trim();
       barcode = String(body.barcode || '').trim();
       descriptionHtml = String(body.descriptionHtml || '').trim();
+      productFeatures = String(body.productFeatures || '').trim();
       status = body.status === 'DRAFT' ? 'DRAFT' : 'ACTIVE';
       locationId = String(body.locationId || '').trim();
       categoryId = String(body.categoryId || '').trim();
@@ -144,6 +147,7 @@ export async function POST(request: NextRequest) {
         sku,
         barcode,
         descriptionHtml,
+        productFeatures,
         status,
         locationId,
         categoryId,

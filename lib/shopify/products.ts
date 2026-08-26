@@ -46,6 +46,7 @@ export interface ProductSummary {
   swatchColor?: string;
   modelTitle?: string;
   groupId?: string;
+  productFeatures?: string;
   isPublished?: boolean;
   publishedChannelsCount?: number;
 }
@@ -60,6 +61,7 @@ export interface CreateProductInput {
   sku?: string;
   barcode?: string;
   descriptionHtml?: string;
+  productFeatures?: string;
   status?: 'ACTIVE' | 'DRAFT';
   locationId?: string;
   categoryId?: string;
@@ -78,6 +80,7 @@ export interface CreateProductInput {
 export interface UpdateProductInput {
   title?: string;
   descriptionHtml?: string;
+  productFeatures?: string;
   categoryId?: string;
   collectionIds?: string[];
   status?: 'ACTIVE' | 'DRAFT';
@@ -174,6 +177,7 @@ export async function fetchProductsList(options: {
           customModelTitleMetafield?: { value?: string };
           customColorNameMetafield?: { value?: string };
           customSwatchColorMetafield?: { value?: string };
+          customProductFeaturesMetafield?: { value?: string };
         };
       }>;
     };
@@ -218,6 +222,7 @@ export async function fetchProductsList(options: {
       swatchColor,
       modelTitle: node.customModelTitleMetafield?.value || parsed.modelTitle,
       groupId: node.customGroupIdMetafield?.value,
+      productFeatures: node.customProductFeaturesMetafield?.value,
     };
   });
 
@@ -395,6 +400,15 @@ export async function createMojoProduct(
       type: 'number_integer',
     },
   ];
+
+  if (input.productFeatures?.trim()) {
+    metafields.push({
+      namespace: 'custom',
+      key: 'mojo_product_features',
+      value: input.productFeatures.trim(),
+      type: 'rich_text_field',
+    });
+  }
 
   // 3. Create Product in Shopify
   const productInput: Record<string, unknown> = {
@@ -612,8 +626,10 @@ export interface AddSiblingColorOptions {
   sku?: string;
   barcode?: string;
   descriptionHtml?: string;
+  productFeatures?: string;
   categoryId?: string;
   collectionIds?: string[];
+  vendor?: string;
   productType?: string;
   tags?: string[] | string;
   weight?: number | string;
@@ -653,9 +669,14 @@ export async function addSiblingColorProduct(
   const quantity = options.quantity !== undefined && String(options.quantity).trim() !== '' ? options.quantity : '0';
   const descriptionHtml =
     options.descriptionHtml !== undefined ? options.descriptionHtml : sourceProduct.descriptionHtml || '';
+  const productFeatures =
+    options.productFeatures !== undefined
+      ? options.productFeatures
+      : sourceProduct.customProductFeaturesMetafield?.value || '';
   const categoryId = options.categoryId || sourceProduct.category?.id;
   const sourceCollections = (sourceProduct as any)?.collections?.nodes?.map((c: any) => c.id) || [];
   const targetCollectionIds = options.collectionIds !== undefined ? options.collectionIds : sourceCollections;
+  const vendor = options.vendor || sourceProduct.vendor || 'MOJO';
   const productType =
     options.productType !== undefined && String(options.productType).trim() !== ''
       ? options.productType
@@ -674,9 +695,11 @@ export async function addSiblingColorProduct(
       sku: options.sku,
       barcode: options.barcode,
       descriptionHtml,
+      productFeatures,
       status,
       categoryId,
       collectionIds: targetCollectionIds,
+      vendor,
       productType,
       tags,
       weight: options.weight,
@@ -808,6 +831,17 @@ export async function updateMojoProduct(
     } else if (typeof input.tags === 'string') {
       productInput.tags = input.tags.split(',').map((t) => t.trim()).filter(Boolean);
     }
+    hasProductUpdates = true;
+  }
+  if (input.productFeatures !== undefined) {
+    productInput.metafields = [
+      {
+        namespace: 'custom',
+        key: 'mojo_product_features',
+        value: input.productFeatures.trim(),
+        type: 'rich_text_field',
+      },
+    ];
     hasProductUpdates = true;
   }
 

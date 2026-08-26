@@ -659,4 +659,62 @@ test('Delete Product: self-heals by promoting surviving sibling when primary is 
   }
 });
 
+test('P0 Bug Fix: syncSiblingColorProductReferences MUST NOT include templateSuffix in productUpdate payload', async () => {
+  const { syncSiblingColorProductReferences } = await import('../lib/shopify/mojo.ts');
+  const originalFetch = globalThis.fetch;
+  let receivedProductPayloads = [];
+
+  globalThis.fetch = (async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('productUpdate')) {
+      const parsed = JSON.parse(bodyStr);
+      receivedProductPayloads.push(parsed.variables?.product);
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productUpdate: { product: { id: parsed.variables?.product?.id }, userErrors: [] },
+          },
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  });
+
+  try {
+    const siblings = [
+      {
+        id: 'gid://shopify/Product/8001',
+        title: 'Pristine 3 Gözlü - Siyah',
+        colorName: 'Siyah',
+        hex: '#000000',
+        templateSuffix: 'pristine3gozlu',
+      },
+      {
+        id: 'gid://shopify/Product/8002',
+        title: 'Pristine 3 Gözlü - Krem',
+        colorName: 'Krem',
+        hex: '#EAE3D6',
+      },
+    ];
+
+    const result = await syncSiblingColorProductReferences(siblings, {
+      modelTitle: 'Pristine 3 Gözlü',
+      groupId: 'grp_pristine_3_gozlu',
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(receivedProductPayloads.length, 2);
+
+    for (const payload of receivedProductPayloads) {
+      assert.equal('templateSuffix' in payload, false, 'Payload MUST NOT contain templateSuffix to prevent overwriting existing templates');
+      assert.ok(Array.isArray(payload.metafields), 'Payload must contain metafields');
+      const hasColorProducts = payload.metafields.some((m) => m.key === 'mojo_color_products');
+      assert.equal(hasColorProducts, true, 'Payload must update mojo_color_products');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 

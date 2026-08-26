@@ -18,7 +18,9 @@ export async function POST(
     let sku = '';
     let barcode = '';
     let descriptionHtml = '';
+    let productFeatures: string | undefined = undefined;
     let categoryId = '';
+    let vendor: string | undefined = undefined;
     let productType = '';
     let tags = '';
     let weight = '';
@@ -38,7 +40,13 @@ export async function POST(
       sku = String(formData.get('sku') || '').trim();
       barcode = String(formData.get('barcode') || '').trim();
       descriptionHtml = String(formData.get('descriptionHtml') || '').trim();
+      if (formData.has('productFeatures')) {
+        productFeatures = String(formData.get('productFeatures') || '').trim();
+      }
       categoryId = String(formData.get('categoryId') || '').trim();
+      if (formData.has('vendor')) {
+        vendor = String(formData.get('vendor') || '').trim();
+      }
       productType = String(formData.get('productType') || '').trim();
       tags = String(formData.get('tags') || '').trim();
       weight = String(formData.get('weight') || '').trim();
@@ -79,7 +87,13 @@ export async function POST(
       sku = String(body.sku || '').trim();
       barcode = String(body.barcode || '').trim();
       descriptionHtml = String(body.descriptionHtml || '').trim();
+      if (body.productFeatures !== undefined) {
+        productFeatures = String(body.productFeatures || '').trim();
+      }
       categoryId = String(body.categoryId || '').trim();
+      if (body.vendor !== undefined) {
+        vendor = String(body.vendor || '').trim();
+      }
       collectionIds = Array.isArray(body.collectionIds) ? body.collectionIds : undefined;
       productType = String(body.productType || '').trim();
       tags = String(body.tags || '').trim();
@@ -108,8 +122,10 @@ export async function POST(
       sku: sku || undefined,
       barcode: barcode || undefined,
       descriptionHtml: descriptionHtml || undefined,
+      productFeatures,
       categoryId: categoryId || undefined,
       collectionIds,
+      vendor: vendor || undefined,
       productType: productType || undefined,
       tags: tags || undefined,
       weight: weight || undefined,

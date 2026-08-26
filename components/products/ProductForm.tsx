@@ -40,6 +40,7 @@ export function ProductForm() {
   const [selectedColor, setSelectedColor] = useState('Siyah');
   const [customColorHex, setCustomColorHex] = useState('');
   const [description, setDescription] = useState('');
+  const [productFeatures, setProductFeatures] = useState('');
 
   useEffect(() => {
     async function loadCollections() {
@@ -182,6 +183,9 @@ export function ProductForm() {
           })
           .join('');
         formData.append('descriptionHtml', html || `<p>${description.trim()}</p>`);
+      }
+      if (productFeatures.trim()) {
+        formData.append('productFeatures', productFeatures.trim());
       }
       formData.append('status', status);
       formData.append('vendor', vendor.trim() || 'MOJO');
@@ -555,6 +559,27 @@ export function ProductForm() {
                 className="input-field"
                 style={{ resize: 'vertical', minHeight: 90 }}
               />
+            </div>
+
+            {/* Product Features (custom.mojo_product_features - PDP Accordion Tab) */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label className="label" style={{ marginBottom: 0 }}>
+                  Ürün Özellikleri (PDP Akordiyon / Teknik Detaylar)
+                </label>
+                <span style={{ fontSize: 11, color: '#F61F1F', fontWeight: 600 }}>custom.mojo_product_features</span>
+              </div>
+              <textarea
+                rows={4}
+                placeholder="Ölçüler, iç hacim, bölmeler, askı yapısı ve materyal detayları (HTML veya metin)..."
+                value={productFeatures}
+                onChange={(e) => setProductFeatures(e.target.value)}
+                className="input-field"
+                style={{ resize: 'vertical', minHeight: 90 }}
+              />
+              <p className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Bu alana girilen metin, ürün sayfasındaki <strong>ÜRÜN ÖZELLİKLERİ</strong> sekmesinde dinamik olarak görüntülenir.
+              </p>
             </div>
           </div>
 

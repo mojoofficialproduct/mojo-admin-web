@@ -334,7 +334,6 @@ export async function syncSiblingColorProductReferences(
       variables: {
         product: {
           id: sId,
-          templateSuffix: sibling.templateSuffix || 'mojo-dynamic',
           metafields,
         },
       },
