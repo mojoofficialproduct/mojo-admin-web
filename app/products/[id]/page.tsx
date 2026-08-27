@@ -57,6 +57,7 @@ export default function ProductDetailPage({
   const [editBarcode, setEditBarcode] = useState('');
   const [editTags, setEditTags] = useState('');
   const [editStatus, setEditStatus] = useState<'ACTIVE' | 'DRAFT'>('ACTIVE');
+  const [editHomepageVisible, setEditHomepageVisible] = useState(true);
 
   // Initial Edit Values for Dirty Tracking
   const [initialEditValues, setInitialEditValues] = useState<{
@@ -72,6 +73,7 @@ export default function ProductDetailPage({
     barcode: string;
     tags: string;
     status: 'ACTIVE' | 'DRAFT';
+    homepageVisible: boolean;
   }>({
     title: '',
     description: '',
@@ -85,6 +87,7 @@ export default function ProductDetailPage({
     barcode: '',
     tags: '',
     status: 'ACTIVE',
+    homepageVisible: true,
   });
 
   // New Sibling Color Modal State
@@ -104,6 +107,7 @@ export default function ProductDetailPage({
   const [colorTags, setColorTags] = useState('çanta, kadın');
   const [colorWeight, setColorWeight] = useState('');
   const [colorStatus, setColorStatus] = useState<'ACTIVE' | 'DRAFT'>('ACTIVE');
+  const [colorHomepageVisible, setColorHomepageVisible] = useState(true);
   const [colorImages, setColorImages] = useState<LocalImageItem[]>([]);
   const [isCreatingColor, setIsCreatingColor] = useState(false);
 
@@ -141,6 +145,7 @@ export default function ProductDetailPage({
       const initialStatus = (p?.status as 'ACTIVE' | 'DRAFT') || 'ACTIVE';
       const initialTags = p?.tags ? (Array.isArray(p.tags) ? p.tags.join(', ') : String(p.tags)) : '';
       const initialFeatures = p?.customProductFeaturesMetafield?.value || '';
+      const initialHomepageVisible = p?.customHomepageVisibleMetafield?.value !== 'false';
 
       setEditTitle(initialTitle);
       setEditDescription(initialDesc);
@@ -154,6 +159,7 @@ export default function ProductDetailPage({
       setEditBarcode(initialBarcode);
       setEditStatus(initialStatus);
       setEditTags(initialTags);
+      setEditHomepageVisible(initialHomepageVisible);
 
       setInitialEditValues({
         title: initialTitle,
@@ -168,6 +174,7 @@ export default function ProductDetailPage({
         barcode: initialBarcode,
         tags: initialTags,
         status: initialStatus,
+        homepageVisible: initialHomepageVisible,
       });
 
       setColorPrice(initialPrice);
@@ -204,6 +211,7 @@ export default function ProductDetailPage({
     editBarcode !== initialEditValues.barcode ||
     editTags !== initialEditValues.tags ||
     editStatus !== initialEditValues.status ||
+    editHomepageVisible !== initialEditValues.homepageVisible ||
     JSON.stringify(editCollectionIds.slice().sort()) !== JSON.stringify(initialEditValues.collectionIds.slice().sort());
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -228,6 +236,7 @@ export default function ProductDetailPage({
           barcode: editBarcode.trim(),
           tags: editTags.trim(),
           status: editStatus,
+          homepageVisible: editHomepageVisible,
         }),
       });
 
@@ -305,6 +314,13 @@ export default function ProductDetailPage({
       setColorBarcode('');
       setColorWeight('');
       setColorStatus('ACTIVE');
+
+      const siblingNodes = product.customColorProductsMetafield?.references?.nodes || [product];
+      const activeCount = siblingNodes.filter(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (s: any) => s.customHomepageVisibleMetafield?.value === 'true'
+      ).length;
+      setColorHomepageVisible(activeCount < 5);
     }
     setIsColorModalOpen(true);
   };
@@ -377,6 +393,7 @@ export default function ProductDetailPage({
         formData.append('weight', colorWeight.trim().replace(',', '.'));
       }
       formData.append('status', colorStatus);
+      formData.append('homepageVisible', colorHomepageVisible ? 'true' : 'false');
 
       // Append binary files
       colorImages.forEach((item) => {
@@ -688,10 +705,37 @@ export default function ProductDetailPage({
                   })}
                 </div>
               ) : (
-                <div style={{ fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' }}>
-                  Koleksiyonlar yükleniyor...
-                </div>
+                <p className="text-muted" style={{ fontSize: 13 }}>Koleksiyon bulunamadı.</p>
               )}
+
+              {/* Homepage Curated Visibility */}
+              <div
+                style={{
+                  padding: '12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: editHomepageVisible ? '1px solid #BBF7D0' : '1px solid #E5E7EB',
+                  backgroundColor: editHomepageVisible ? '#F0FDF4' : '#F9FAFB',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  id="editHomepageVisibleToggle"
+                  checked={editHomepageVisible}
+                  onChange={(e) => setEditHomepageVisible(e.target.checked)}
+                  style={{ width: 18, height: 18, marginTop: 2, cursor: 'pointer' }}
+                />
+                <label htmlFor="editHomepageVisibleToggle" style={{ cursor: 'pointer', fontSize: 13 }}>
+                  <span style={{ fontWeight: 700, color: '#111827', display: 'block' }}>
+                    Ana Sayfada Göster (Maks 5 Renk)
+                  </span>
+                  <span style={{ fontSize: 11, color: '#6B7280', display: 'block', marginTop: 2 }}>
+                    Bu ürünün ana sayfa vitrininde kart olarak listelenmesini sağlar. Ürün ailesinde en fazla 5 renk seçilebilir.
+                  </span>
+                </label>
+              </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
@@ -845,126 +889,162 @@ export default function ProductDetailPage({
         </div>
 
         {/* Sibling Colors Section */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <h2 className="heading-md">Model Renk Seçenekleri ({siblingProducts.length > 0 ? siblingProducts.length : 1})</h2>
-              <p className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>
-                Mağazada aynı modelin diğer renk alternatifleri olarak gösterilen bağlı ürünler.
-              </p>
-            </div>
+        {(() => {
+          const visibleSiblingsCount = siblingProducts.filter(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (s: any) => s.customHomepageVisibleMetafield?.value === 'true'
+          ).length;
 
-            <button
-              type="button"
-              onClick={handleOpenColorModal}
-              className="btn btn-primary btn-sm"
-              style={{ gap: 6, fontWeight: 700 }}
-            >
-              <Plus size={14} />
-              <span>Yeni Renk Ekle</span>
-            </button>
-          </div>
-
-          {/* Sibling Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
-            {siblingProducts.length > 0 ? (
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              siblingProducts.map((sibling: any) => {
-                const sColor = sibling.customColorNameMetafield?.value || parseMojoProductTitle(sibling.title).colorName || 'Renk';
-                const sHex = sibling.customSwatchColorMetafield?.value || getColorSwatch(sColor);
-                const isCurrent = sibling.id === product.id;
-                const hasImage = Boolean(sibling.featuredImage?.url);
-
-                return (
-                  <Link
-                    key={sibling.id}
-                    href={`/products/${sibling.id.split('/').pop()}`}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: 12,
-                      borderRadius: 'var(--radius-sm)',
-                      border: isCurrent ? '2px solid #000000' : '1px solid var(--border-subtle)',
-                      backgroundColor: isCurrent ? '#F9FAFB' : '#FFFFFF',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <div
+          return (
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <h2 className="heading-md" style={{ margin: 0 }}>Model Renk Seçenekleri ({siblingProducts.length > 0 ? siblingProducts.length : 1})</h2>
+                    <span
                       style={{
-                        width: 48,
-                        height: 60,
-                        borderRadius: 4,
-                        overflow: 'hidden',
-                        backgroundColor: '#F3F4F6',
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                        borderRadius: 12,
+                        backgroundColor: visibleSiblingsCount <= 5 ? '#ECFDF5' : '#FEF2F2',
+                        color: visibleSiblingsCount <= 5 ? '#065F46' : '#991B1B',
+                        border: visibleSiblingsCount <= 5 ? '1px solid #A7F3D0' : '1px solid #FECACA',
                       }}
                     >
-                      {hasImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={sibling.featuredImage.url}
-                          alt={sibling.title}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, color: '#9CA3AF' }}>
-                          <ImageOff size={16} />
-                          <span style={{ fontSize: 8, fontWeight: 600 }}>Görsel Yok</span>
-                        </div>
-                      )}
-                    </div>
+                      Ana Sayfa Seçimi: {visibleSiblingsCount} / 5
+                    </span>
+                  </div>
+                  <p className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+                    Mağazada aynı modelin diğer renk alternatifleri olarak gösterilen bağlı ürünler. PDP&apos;de tümü görünür, ana sayfada seçilen en fazla 5 renk listelenir.
+                  </p>
+                </div>
 
-                    <div style={{ overflow: 'hidden', flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
-                            backgroundColor: sHex,
-                            border: '1px solid rgba(0,0,0,0.15)',
-                          }}
-                        />
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {sColor}
-                        </span>
-                        {isCurrent && (
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#F61F1F', textTransform: 'uppercase' }}>
-                            (Mevcut)
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-                        {sibling.variants?.nodes?.[0]?.price
-                          ? formatPriceTRY(sibling.variants.nodes[0].price)
-                          : '—'}
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })
-            ) : (
-              <div
-                style={{
-                  gridColumn: '1 / -1',
-                  padding: '24px',
-                  backgroundColor: '#FAFAFA',
-                  borderRadius: 'var(--radius-sm)',
-                  textAlign: 'center',
-                  color: '#6B7280',
-                  fontSize: 13,
-                }}
-              >
-                Bu model şu anda tek renklidir. &quot;Yeni Renk Ekle&quot; butonuna basarak kardeş renk varyantları oluşturabilirsiniz.
+                <button
+                  type="button"
+                  onClick={handleOpenColorModal}
+                  className="btn btn-primary btn-sm"
+                  style={{ gap: 6, fontWeight: 700 }}
+                >
+                  <Plus size={14} />
+                  <span>Yeni Renk Ekle</span>
+                </button>
               </div>
-            )}
-          </div>
-        </div>
+
+              {/* Sibling Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
+                {siblingProducts.length > 0 ? (
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  siblingProducts.map((sibling: any) => {
+                    const sColor = sibling.customColorNameMetafield?.value || parseMojoProductTitle(sibling.title).colorName || 'Renk';
+                    const sHex = sibling.customSwatchColorMetafield?.value || getColorSwatch(sColor);
+                    const isCurrent = sibling.id === product.id;
+                    const hasImage = Boolean(sibling.featuredImage?.url);
+                    const isHomeVis = sibling.customHomepageVisibleMetafield?.value === 'true';
+
+                    return (
+                      <Link
+                        key={sibling.id}
+                        href={`/products/${sibling.id.split('/').pop()}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: 12,
+                          borderRadius: 'var(--radius-sm)',
+                          border: isCurrent ? '2px solid #000000' : '1px solid var(--border-subtle)',
+                          backgroundColor: isCurrent ? '#F9FAFB' : '#FFFFFF',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 48,
+                            height: 60,
+                            borderRadius: 4,
+                            overflow: 'hidden',
+                            backgroundColor: '#F3F4F6',
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {hasImage ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={sibling.featuredImage.url}
+                              alt={sibling.title}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, color: '#9CA3AF' }}>
+                              <ImageOff size={16} />
+                              <span style={{ fontSize: 8, fontWeight: 600 }}>Görsel Yok</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ overflow: 'hidden', flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: '50%',
+                                backgroundColor: sHex,
+                                border: '1px solid rgba(0,0,0,0.15)',
+                              }}
+                            />
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {sColor}
+                            </span>
+                            {isCurrent && (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#F61F1F', textTransform: 'uppercase' }}>
+                                (Mevcut)
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                            <span style={{ fontSize: 12, color: '#6B7280' }}>
+                              {sibling.variants?.nodes?.[0]?.price
+                                ? formatPriceTRY(sibling.variants.nodes[0].price)
+                                : '—'}
+                            </span>
+                            {isHomeVis ? (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', backgroundColor: '#ECFDF5', padding: '1px 5px', borderRadius: 4 }}>
+                                ✓ Ana Sayfa
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: 10, color: '#9CA3AF', backgroundColor: '#F3F4F6', padding: '1px 5px', borderRadius: 4 }}>
+                                Ana Sayfa Kapalı
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })
+                ) : (
+                  <div
+                    style={{
+                      gridColumn: '1 / -1',
+                      padding: '24px',
+                      backgroundColor: '#FAFAFA',
+                      borderRadius: 'var(--radius-sm)',
+                      textAlign: 'center',
+                      color: '#6B7280',
+                      fontSize: 13,
+                    }}
+                  >
+                    Bu model şu anda tek renklidir. &quot;Yeni Renk Ekle&quot; butonuna basarak kardeş renk varyantları oluşturabilirsiniz.
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Product Media Gallery */}
         {product.media?.nodes && product.media.nodes.length > 0 && (
@@ -1344,6 +1424,35 @@ export default function ProductDetailPage({
                     <option value="DRAFT">Taslak</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Homepage Curated Visibility for Sibling */}
+              <div
+                style={{
+                  padding: '12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: colorHomepageVisible ? '1px solid #BBF7D0' : '1px solid #E5E7EB',
+                  backgroundColor: colorHomepageVisible ? '#F0FDF4' : '#F9FAFB',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  id="colorHomepageVisibleToggle"
+                  checked={colorHomepageVisible}
+                  onChange={(e) => setColorHomepageVisible(e.target.checked)}
+                  style={{ width: 18, height: 18, marginTop: 2, cursor: 'pointer' }}
+                />
+                <label htmlFor="colorHomepageVisibleToggle" style={{ cursor: 'pointer', fontSize: 13 }}>
+                  <span style={{ fontWeight: 700, color: '#111827', display: 'block' }}>
+                    Ana Sayfada Göster (Maks 5)
+                  </span>
+                  <span style={{ fontSize: 11, color: '#6B7280', display: 'block', marginTop: 2 }}>
+                    Bu kardeş rengin ana sayfa vitrininde listelenmesini sağlar. Ailede en fazla 5 renk seçilebilir.
+                  </span>
+                </label>
               </div>
 
               {/* Description */}

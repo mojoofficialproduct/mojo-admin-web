@@ -30,6 +30,7 @@ export async function POST(
     let collectionIds: string[] | undefined = undefined;
     let cardGroup: string | undefined = undefined;
     let showInEssential: boolean | undefined = undefined;
+    let homepageVisible: boolean | undefined = undefined;
     const imageItems: ImageUploadItem[] = [];
 
     if (contentType.includes('multipart/form-data')) {
@@ -51,6 +52,9 @@ export async function POST(
       }
       if (formData.has('showInEssential')) {
         showInEssential = formData.get('showInEssential') !== 'false';
+      }
+      if (formData.has('homepageVisible')) {
+        homepageVisible = formData.get('homepageVisible') !== 'false';
       }
       if (formData.has('vendor')) {
         vendor = String(formData.get('vendor') || '').trim();
@@ -105,6 +109,9 @@ export async function POST(
       if (body.showInEssential !== undefined) {
         showInEssential = body.showInEssential !== false;
       }
+      if (body.homepageVisible !== undefined) {
+        homepageVisible = body.homepageVisible !== false;
+      }
       if (body.vendor !== undefined) {
         vendor = String(body.vendor || '').trim();
       }
@@ -141,6 +148,7 @@ export async function POST(
       collectionIds,
       cardGroup: cardGroup || undefined,
       showInEssential,
+      homepageVisible,
       vendor: vendor || undefined,
       productType: productType || undefined,
       tags: tags || undefined,

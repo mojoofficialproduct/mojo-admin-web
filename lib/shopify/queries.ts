@@ -77,6 +77,9 @@ export const PRODUCTS_QUERY = /* GraphQL */ `
           customProductFeaturesMetafield: metafield(namespace: "custom", key: "mojo_product_features") {
             value
           }
+          customHomepageVisibleMetafield: metafield(namespace: "custom", key: "mojo_homepage_visible") {
+            value
+          }
         }
       }
     }
@@ -223,6 +226,9 @@ export const GET_PRODUCT_QUERY = /* GraphQL */ `
               customCardGroupMetafield: metafield(namespace: "custom", key: "mojo_card_group") {
                 value
               }
+              customHomepageVisibleMetafield: metafield(namespace: "custom", key: "mojo_homepage_visible") {
+                value
+              }
             }
           }
         }
@@ -236,6 +242,10 @@ export const GET_PRODUCT_QUERY = /* GraphQL */ `
         value
       }
       customProductFeaturesMetafield: metafield(namespace: "custom", key: "mojo_product_features") {
+        id
+        value
+      }
+      customHomepageVisibleMetafield: metafield(namespace: "custom", key: "mojo_homepage_visible") {
         id
         value
       }

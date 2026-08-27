@@ -835,6 +835,307 @@ test('Card Group Architecture: detectMojoCardGroup identifies subgroups accurate
   assert.equal(detectMojoCardGroup('test 5 - Siyah', 'test 5', 'grp_123_test-5'), 'grp_123_test-5');
 });
 
+test('Homepage Curated Max-5: createMojoProduct creates custom.mojo_homepage_visible boolean metafield', async () => {
+  const { createMojoProduct } = await import('../lib/shopify/products.ts');
+  const originalFetch = globalThis.fetch;
+
+  let createPayload = null;
+
+  globalThis.fetch = async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('ProductCreate') || bodyStr.includes('productCreate')) {
+      const parsed = JSON.parse(bodyStr);
+      createPayload = parsed.variables?.product;
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productCreate: {
+              product: {
+                id: 'gid://shopify/Product/10001',
+                title: createPayload.title,
+                handle: 'test-product',
+                status: 'ACTIVE',
+                templateSuffix: 'mojo-dynamic',
+                variants: { nodes: [{ id: 'gid://shopify/ProductVariant/10001' }] },
+              },
+              userErrors: [],
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('GetAllProducts') || bodyStr.includes('products(')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            products: { edges: [] },
+          },
+        }),
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        data: {
+          productVariantsBulkUpdate: { userErrors: [] },
+          publications: { nodes: [] },
+          product: { id: 'gid://shopify/Product/10001' },
+        },
+      }),
+    };
+  };
+
+  try {
+    const res = await createMojoProduct({
+      modelTitle: 'Curated Model',
+      colorName: 'Siyah',
+      price: '999',
+      homepageVisible: true,
+    });
+
+    assert.equal(res.success, true);
+    assert.ok(createPayload, 'productCreate mutation called');
+    const homeVisMetafield = createPayload.metafields?.find((m) => m.key === 'mojo_homepage_visible');
+    assert.ok(homeVisMetafield, 'mojo_homepage_visible must be present');
+    assert.equal(homeVisMetafield.type, 'boolean');
+    assert.equal(homeVisMetafield.value, 'true');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Homepage Curated Max-5: updateMojoProduct preserves existing value when undefined', async () => {
+  const { updateMojoProduct } = await import('../lib/shopify/products.ts');
+  const originalFetch = globalThis.fetch;
+
+  let updatePayload = null;
+
+  globalThis.fetch = async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('ProductUpdate') || bodyStr.includes('productUpdate')) {
+      const parsed = JSON.parse(bodyStr);
+      updatePayload = parsed.variables?.product;
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productUpdate: { product: { id: parsed.variables?.product?.id }, userErrors: [] },
+          },
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  };
+
+  try {
+    const res = await updateMojoProduct('gid://shopify/Product/10001', {
+      title: 'Only Title Update',
+    });
+
+    assert.equal(res.success, true);
+    assert.ok(updatePayload);
+    const homeVisMetafield = updatePayload.metafields?.find((m) => m.key === 'mojo_homepage_visible');
+    assert.equal(homeVisMetafield, undefined, 'homepageVisible must not be updated if omitted');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Homepage Curated Max-5: updateMojoProduct blocks 6th selection in same family', async () => {
+  const { updateMojoProduct } = await import('../lib/shopify/products.ts');
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('GetProduct') || bodyStr.includes('product(')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            product: {
+              id: 'gid://shopify/Product/6',
+              title: 'Family A - 6',
+              customColorProductsMetafield: {
+                references: {
+                  nodes: [
+                    { id: 'gid://shopify/Product/1', customHomepageVisibleMetafield: { value: 'true' } },
+                    { id: 'gid://shopify/Product/2', customHomepageVisibleMetafield: { value: 'true' } },
+                    { id: 'gid://shopify/Product/3', customHomepageVisibleMetafield: { value: 'true' } },
+                    { id: 'gid://shopify/Product/4', customHomepageVisibleMetafield: { value: 'true' } },
+                    { id: 'gid://shopify/Product/5', customHomepageVisibleMetafield: { value: 'true' } },
+                    { id: 'gid://shopify/Product/6', customHomepageVisibleMetafield: { value: 'false' } },
+                  ],
+                },
+              },
+            },
+          },
+        }),
+      };
+    }
+    return originalFetch(url, init);
+  };
+
+  try {
+    const res = await updateMojoProduct('gid://shopify/Product/6', {
+      homepageVisible: true,
+    });
+
+    assert.equal(res.success, false);
+    assert.equal(res.error, 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Homepage Curated Max-5: addSiblingColorProduct defaults to true when count < 5 and false when count >= 5', async () => {
+  const { addSiblingColorProduct } = await import('../lib/shopify/products.ts');
+  const originalFetch = globalThis.fetch;
+
+  let createdSiblingPayload = null;
+
+  // Case A: 3 existing visible -> new sibling defaults to true
+  globalThis.fetch = async (url, init) => {
+    const bodyStr = String(init?.body || '');
+    if (bodyStr.includes('GetProduct') || bodyStr.includes('product(')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            product: {
+              id: 'gid://shopify/Product/1',
+              title: 'Family Bag - Siyah',
+              customGroupIdMetafield: { value: 'grp_bag' },
+              customColorProductsMetafield: {
+                references: {
+                  nodes: [
+                    { id: 'gid://shopify/Product/1', customHomepageVisibleMetafield: { value: 'true' } },
+                    { id: 'gid://shopify/Product/2', customHomepageVisibleMetafield: { value: 'true' } },
+                    { id: 'gid://shopify/Product/3', customHomepageVisibleMetafield: { value: 'true' } },
+                  ],
+                },
+              },
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('ProductCreate') || bodyStr.includes('productCreate')) {
+      const parsed = JSON.parse(bodyStr);
+      createdSiblingPayload = parsed.variables?.product;
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productCreate: {
+              product: {
+                id: 'gid://shopify/Product/4',
+                title: createdSiblingPayload.title,
+                handle: 'family-bag-kirmizi',
+                status: 'ACTIVE',
+                variants: { nodes: [{ id: 'gid://shopify/ProductVariant/4' }] },
+              },
+              userErrors: [],
+            },
+          },
+        }),
+      };
+    }
+    if (bodyStr.includes('GetAllProducts') || bodyStr.includes('products(')) {
+      return {
+        ok: true,
+        json: async () => ({
+          data: { products: { edges: [] } },
+        }),
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        data: {
+          productVariantsBulkUpdate: { userErrors: [] },
+          productUpdate: { product: { id: 'gid://shopify/Product/1' }, userErrors: [] },
+        },
+      }),
+    };
+  };
+
+  try {
+    const resA = await addSiblingColorProduct('gid://shopify/Product/1', 'Kırmızı');
+    assert.equal(resA.success, true);
+    const visMetaA = createdSiblingPayload.metafields?.find((m) => m.key === 'mojo_homepage_visible');
+    assert.equal(visMetaA?.value, 'true', 'Sibling should default to true when family count is 3');
+
+    // Case B: 5 existing visible -> new sibling defaults to false
+    globalThis.fetch = async (url, init) => {
+      const bodyStr = String(init?.body || '');
+      if (bodyStr.includes('GetProduct') || bodyStr.includes('product(')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: {
+              product: {
+                id: 'gid://shopify/Product/1',
+                title: 'Family Bag - Siyah',
+                customGroupIdMetafield: { value: 'grp_bag' },
+                customColorProductsMetafield: {
+                  references: {
+                    nodes: [
+                      { id: 'gid://shopify/Product/1', customHomepageVisibleMetafield: { value: 'true' } },
+                      { id: 'gid://shopify/Product/2', customHomepageVisibleMetafield: { value: 'true' } },
+                      { id: 'gid://shopify/Product/3', customHomepageVisibleMetafield: { value: 'true' } },
+                      { id: 'gid://shopify/Product/4', customHomepageVisibleMetafield: { value: 'true' } },
+                      { id: 'gid://shopify/Product/5', customHomepageVisibleMetafield: { value: 'true' } },
+                    ],
+                  },
+                },
+              },
+            },
+          }),
+        };
+      }
+      if (bodyStr.includes('ProductCreate') || bodyStr.includes('productCreate')) {
+        const parsed = JSON.parse(bodyStr);
+        createdSiblingPayload = parsed.variables?.product;
+        return {
+          ok: true,
+          json: async () => ({
+            data: {
+              productCreate: {
+                product: {
+                  id: 'gid://shopify/Product/6',
+                  title: createdSiblingPayload.title,
+                  handle: 'family-bag-yesil',
+                  status: 'ACTIVE',
+                  variants: { nodes: [{ id: 'gid://shopify/ProductVariant/6' }] },
+                },
+                userErrors: [],
+              },
+            },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            productVariantsBulkUpdate: { userErrors: [] },
+            productUpdate: { product: { id: 'gid://shopify/Product/1' }, userErrors: [] },
+          },
+        }),
+      };
+    };
+
+    const resB = await addSiblingColorProduct('gid://shopify/Product/1', 'Yeşil');
+    assert.equal(resB.success, true);
+    const visMetaB = createdSiblingPayload.metafields?.find((m) => m.key === 'mojo_homepage_visible');
+    assert.equal(visMetaB?.value, 'false', 'Sibling should default to false when family count is 5');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 
 
 

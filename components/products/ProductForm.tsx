@@ -87,10 +87,11 @@ export function ProductForm() {
   const [bagClosure, setBagClosure] = useState('Fermuarlı');
   const [ageGroup, setAgeGroup] = useState('Yetişkin');
 
-  // Card Subgroup & Essential settings
+  // Card Subgroup & Essential & Homepage settings
   const [cardGroupPreset, setCardGroupPreset] = useState<'AUTO' | 'HSR' | 'RG' | 'DR' | 'ZEBRA' | 'CUSTOM'>('AUTO');
   const [customCardGroup, setCustomCardGroup] = useState('');
   const [showInEssential, setShowInEssential] = useState(true);
+  const [homepageVisible, setHomepageVisible] = useState(true);
 
   // Accordion Toggles
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
@@ -228,6 +229,7 @@ export function ProductForm() {
         formData.append('cardGroup', finalCardGroup);
       }
       formData.append('showInEssential', showInEssential ? 'true' : 'false');
+      formData.append('homepageVisible', homepageVisible ? 'true' : 'false');
 
       // Append binary files
       images.forEach((item) => {
@@ -1057,6 +1059,36 @@ export function ProductForm() {
               {validationErrors.quantity && (
                 <div style={{ fontSize: 12, color: '#EF4444', marginTop: 4 }}>{validationErrors.quantity}</div>
               )}
+            </div>
+
+            {/* Homepage Curated Visibility */}
+            <div
+              style={{
+                padding: '12px',
+                borderRadius: 'var(--radius-sm)',
+                border: homepageVisible ? '1px solid #BBF7D0' : '1px solid #E5E7EB',
+                backgroundColor: homepageVisible ? '#F0FDF4' : '#F9FAFB',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+                marginTop: 4,
+              }}
+            >
+              <input
+                type="checkbox"
+                id="homepageVisibleToggle"
+                checked={homepageVisible}
+                onChange={(e) => setHomepageVisible(e.target.checked)}
+                style={{ width: 18, height: 18, marginTop: 2, cursor: 'pointer' }}
+              />
+              <label htmlFor="homepageVisibleToggle" style={{ cursor: 'pointer', fontSize: 13 }}>
+                <span style={{ fontWeight: 700, color: '#111827', display: 'block' }}>
+                  Ana Sayfada Göster (Maks 5)
+                </span>
+                <span style={{ fontSize: 11, color: '#6B7280', display: 'block', marginTop: 2 }}>
+                  Bu rengin ana sayfa vitrininde listelenmesini sağlar. Aile başına en fazla 5 renk seçilebilir.
+                </span>
+              </label>
             </div>
           </div>
 

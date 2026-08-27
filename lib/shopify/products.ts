@@ -49,6 +49,7 @@ export interface ProductSummary {
   groupId?: string;
   cardGroup?: string;
   productFeatures?: string;
+  homepageVisible?: boolean;
   isPublished?: boolean;
   publishedChannelsCount?: number;
 }
@@ -70,6 +71,7 @@ export interface CreateProductInput {
   collectionIds?: string[];
   cardGroup?: string;
   showInEssential?: boolean;
+  homepageVisible?: boolean;
   vendor?: string;
   productType?: string;
   tags?: string[] | string;
@@ -89,6 +91,7 @@ export interface UpdateProductInput {
   collectionIds?: string[];
   cardGroup?: string;
   showInEssential?: boolean;
+  homepageVisible?: boolean;
   status?: 'ACTIVE' | 'DRAFT';
   vendor?: string;
   productType?: string;
@@ -185,6 +188,7 @@ export async function fetchProductsList(options: {
           customColorNameMetafield?: { value?: string };
           customSwatchColorMetafield?: { value?: string };
           customProductFeaturesMetafield?: { value?: string };
+          customHomepageVisibleMetafield?: { value?: string };
         };
       }>;
     };
@@ -231,6 +235,7 @@ export async function fetchProductsList(options: {
       groupId: node.customGroupIdMetafield?.value,
       cardGroup: node.customCardGroupMetafield?.value,
       productFeatures: node.customProductFeaturesMetafield?.value,
+      homepageVisible: node.customHomepageVisibleMetafield?.value === 'true',
     };
   });
 
@@ -424,6 +429,31 @@ export async function createMojoProduct(
       type: 'multi_line_text_field',
     });
   }
+
+  const homepageVisible = input.homepageVisible !== undefined ? input.homepageVisible : true;
+  if (homepageVisible === true && groupId) {
+    try {
+      const allProds = await fetchProductsList({ first: 50 });
+      const existingInGroup = allProds.products.filter(
+        (p) => p.groupId === groupId && p.homepageVisible === true
+      );
+      if (existingInGroup.length >= 5) {
+        return {
+          success: false,
+          error: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
+        };
+      }
+    } catch (e) {
+      console.warn('Family homepage count validation notice:', e);
+    }
+  }
+
+  metafields.push({
+    namespace: 'custom',
+    key: 'mojo_homepage_visible',
+    value: homepageVisible ? 'true' : 'false',
+    type: 'boolean',
+  });
 
   // 3. Create Product in Shopify
   const productInput: Record<string, unknown> = {
@@ -656,6 +686,7 @@ export interface AddSiblingColorOptions {
   collectionIds?: string[];
   cardGroup?: string;
   showInEssential?: boolean;
+  homepageVisible?: boolean;
   vendor?: string;
   productType?: string;
   tags?: string[] | string;
@@ -687,6 +718,24 @@ export async function addSiblingColorProduct(
   const sourceGroupId =
     sourceProduct.customGroupIdMetafield?.value || `grp_${Date.now()}_${slugifyTurkish(modelTitle).slice(0, 20)}`;
   const sourceCardGroup = sourceProduct.customCardGroupMetafield?.value;
+
+  const existingSiblings: SiblingProductInput[] =
+    sourceProduct.customColorProductsMetafield?.references?.nodes || [sourceProduct];
+
+  const visibleSiblingsCount = existingSiblings.filter(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (s: any) => s.customHomepageVisibleMetafield?.value === 'true' || s.homepageVisible === true
+  ).length;
+
+  let targetHomepageVisible = options.homepageVisible;
+  if (targetHomepageVisible === undefined) {
+    targetHomepageVisible = visibleSiblingsCount < 5;
+  } else if (targetHomepageVisible === true && visibleSiblingsCount >= 5) {
+    return {
+      success: false,
+      error: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
+    };
+  }
 
   const firstVariant = sourceProduct.variants?.nodes?.[0];
   const price = options.price !== undefined && String(options.price).trim() !== '' ? options.price : firstVariant?.price || '0';
@@ -732,6 +781,7 @@ export async function addSiblingColorProduct(
       collectionIds: targetCollectionIds,
       cardGroup: initialCardGroup,
       showInEssential: options.showInEssential,
+      homepageVisible: targetHomepageVisible,
       vendor,
       productType,
       tags,
@@ -750,9 +800,6 @@ export async function addSiblingColorProduct(
   }
 
   // Gather all existing sibling products + the new one and sync references across all of them
-  const existingSiblings: SiblingProductInput[] =
-    sourceProduct.customColorProductsMetafield?.references?.nodes || [sourceProduct];
-
   const targetCardGroup = createResult.product.cardGroup || initialCardGroup;
 
   const allSiblings: SiblingProductInput[] = [
@@ -890,6 +937,37 @@ export async function updateMojoProduct(
       key: 'mojo_card_group',
       value: input.cardGroup.trim(),
       type: 'single_line_text_field',
+    });
+  }
+  if (input.homepageVisible !== undefined) {
+    if (input.homepageVisible === true) {
+      try {
+        const currentProduct = await fetchProductById(productId);
+        const siblings: Array<{ id: string; customHomepageVisibleMetafield?: { value?: string } }> =
+          currentProduct?.customColorProductsMetafield?.references?.nodes || [currentProduct];
+
+        const otherVisibleCount = siblings.filter((s) => {
+          const sId = String(s.id).startsWith('gid://') ? s.id : `gid://shopify/Product/${s.id}`;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return sId !== fullProductId && (s.customHomepageVisibleMetafield?.value === 'true' || (s as any).customHomepageVisibleMetafield?.value === true);
+        }).length;
+
+        if (otherVisibleCount >= 5) {
+          return {
+            success: false,
+            error: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
+          };
+        }
+      } catch (err) {
+        console.warn('Update homepage count validation notice:', err);
+      }
+    }
+
+    metafieldsToUpdate.push({
+      namespace: 'custom',
+      key: 'mojo_homepage_visible',
+      value: input.homepageVisible ? 'true' : 'false',
+      type: 'boolean',
     });
   }
   if (metafieldsToUpdate.length > 0) {

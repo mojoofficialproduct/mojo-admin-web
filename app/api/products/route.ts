@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
     let collectionIds: string[] = [];
     let cardGroup = '';
     let showInEssential = true;
+    let homepageVisible = true;
     const imageItems: ImageUploadItem[] = [];
 
     if (contentType.includes('multipart/form-data')) {
@@ -75,6 +76,9 @@ export async function POST(request: NextRequest) {
       cardGroup = String(formData.get('cardGroup') || '').trim();
       if (formData.get('showInEssential') !== null) {
         showInEssential = formData.get('showInEssential') !== 'false';
+      }
+      if (formData.get('homepageVisible') !== null) {
+        homepageVisible = formData.get('homepageVisible') !== 'false';
       }
       vendor = String(formData.get('vendor') || 'MOJO').trim();
       productType = String(formData.get('productType') || '').trim();
@@ -126,6 +130,9 @@ export async function POST(request: NextRequest) {
       collectionIds = Array.isArray(body.collectionIds) ? body.collectionIds : [];
       cardGroup = String(body.cardGroup || '').trim();
       showInEssential = body.showInEssential !== false;
+      if (body.homepageVisible !== undefined) {
+        homepageVisible = body.homepageVisible !== false;
+      }
       vendor = String(body.vendor || 'MOJO').trim();
       productType = String(body.productType || '').trim();
       tags = String(body.tags || '').trim();
@@ -162,6 +169,7 @@ export async function POST(request: NextRequest) {
         collectionIds,
         cardGroup: cardGroup || undefined,
         showInEssential,
+        homepageVisible,
         vendor,
         productType,
         tags,
