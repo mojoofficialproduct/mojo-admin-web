@@ -825,5 +825,16 @@ test('Regression Test: custom.mojo_product_features MUST use multi_line_text_fie
   }
 });
 
+test('Card Group Architecture: detectMojoCardGroup identifies subgroups accurately', async () => {
+  const { detectMojoCardGroup } = await import('../lib/shopify/mojo.ts');
+  
+  assert.equal(detectMojoCardGroup('MOJO Body Bags - Taba HSR', 'MOJO Body Bags'), 'HSR');
+  assert.equal(detectMojoCardGroup('MOJO Body Bags - Siyah RG', 'MOJO Body Bags'), 'RG');
+  assert.equal(detectMojoCardGroup('MOJO Body Bags - Zebra Beyaz DR', 'MOJO Body Bags'), 'ZEBRA');
+  assert.equal(detectMojoCardGroup('MOJO Body Bags - Vizon DR', 'MOJO Body Bags'), 'DR');
+  assert.equal(detectMojoCardGroup('test 5 - Siyah', 'test 5', 'grp_123_test-5'), 'grp_123_test-5');
+});
+
+
 
 

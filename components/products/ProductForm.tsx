@@ -87,6 +87,11 @@ export function ProductForm() {
   const [bagClosure, setBagClosure] = useState('Fermuarlı');
   const [ageGroup, setAgeGroup] = useState('Yetişkin');
 
+  // Card Subgroup & Essential settings
+  const [cardGroupPreset, setCardGroupPreset] = useState<'AUTO' | 'HSR' | 'RG' | 'DR' | 'ZEBRA' | 'CUSTOM'>('AUTO');
+  const [customCardGroup, setCustomCardGroup] = useState('');
+  const [showInEssential, setShowInEssential] = useState(true);
+
   // Accordion Toggles
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
@@ -216,6 +221,13 @@ export function ProductForm() {
         });
         formData.append('collectionIdsJson', JSON.stringify(selectedCollectionIds));
       }
+
+      const finalCardGroup =
+        cardGroupPreset === 'CUSTOM' ? customCardGroup.trim() : cardGroupPreset === 'AUTO' ? '' : cardGroupPreset;
+      if (finalCardGroup) {
+        formData.append('cardGroup', finalCardGroup);
+      }
+      formData.append('showInEssential', showInEssential ? 'true' : 'false');
 
       // Append binary files
       images.forEach((item) => {
@@ -515,6 +527,65 @@ export function ProductForm() {
                   Koleksiyon listesi yükleniyor...
                 </div>
               )}
+            </div>
+
+            {/* Kart Renk Grubu & Essential Vitrin Ayarları */}
+            <div style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 8, padding: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label className="label" style={{ marginBottom: 0, fontWeight: 600 }}>
+                  Kart Renk Grubu (Card Subgroup)
+                </label>
+                <span style={{ fontSize: 11, color: '#4B5563', fontWeight: 500 }}>
+                  custom.mojo_card_group
+                </span>
+              </div>
+              <p className="text-muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                Ürün kartlarının altında gösterilecek kardeş swatch alt grubunu belirler. Otomatik modda başlık kontrol edilir (HSR, RG, DR, Zebra).
+              </p>
+              
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: cardGroupPreset === 'CUSTOM' ? 10 : 0 }}>
+                {(['AUTO', 'HSR', 'RG', 'DR', 'ZEBRA', 'CUSTOM'] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setCardGroupPreset(preset)}
+                    className={`btn btn-sm ${cardGroupPreset === preset ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ fontSize: 12, padding: '4px 10px' }}
+                  >
+                    {preset === 'AUTO' ? '⚡ Otomatik Tespit' : preset === 'CUSTOM' ? '✏️ Özel Grup' : preset}
+                  </button>
+                ))}
+              </div>
+
+              {cardGroupPreset === 'CUSTOM' && (
+                <input
+                  type="text"
+                  placeholder="Örn: VIZON-SET veya MODEL-SUBGROUP"
+                  value={customCardGroup}
+                  onChange={(e) => setCustomCardGroup(e.target.value)}
+                  className="input-field"
+                  style={{ marginTop: 8 }}
+                />
+              )}
+
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #E5E7EB' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={showInEssential}
+                    onChange={(e) => setShowInEssential(e.target.checked)}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
+                      Ana Sayfa ESSENTIAL&apos;da Göster
+                    </span>
+                    <p style={{ fontSize: 11, color: '#6B7280', margin: 0 }}>
+                      Ürün otomatik olarak Ana Sayfa &quot;MOJO KOLEKSİYON / ESSENTIAL&quot; vitrinine eklenir (en başta listelenir).
+                    </p>
+                  </div>
+                </label>
+              </div>
             </div>
 
             {/* Description with Quick Helpers */}

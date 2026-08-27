@@ -28,6 +28,8 @@ export async function POST(
     let status: 'ACTIVE' | 'DRAFT' = 'ACTIVE';
     let requiresShipping = true;
     let collectionIds: string[] | undefined = undefined;
+    let cardGroup: string | undefined = undefined;
+    let showInEssential: boolean | undefined = undefined;
     const imageItems: ImageUploadItem[] = [];
 
     if (contentType.includes('multipart/form-data')) {
@@ -44,6 +46,12 @@ export async function POST(
         productFeatures = String(formData.get('productFeatures') || '').trim();
       }
       categoryId = String(formData.get('categoryId') || '').trim();
+      if (formData.has('cardGroup')) {
+        cardGroup = String(formData.get('cardGroup') || '').trim();
+      }
+      if (formData.has('showInEssential')) {
+        showInEssential = formData.get('showInEssential') !== 'false';
+      }
       if (formData.has('vendor')) {
         vendor = String(formData.get('vendor') || '').trim();
       }
@@ -91,6 +99,12 @@ export async function POST(
         productFeatures = String(body.productFeatures || '').trim();
       }
       categoryId = String(body.categoryId || '').trim();
+      if (body.cardGroup !== undefined) {
+        cardGroup = String(body.cardGroup || '').trim();
+      }
+      if (body.showInEssential !== undefined) {
+        showInEssential = body.showInEssential !== false;
+      }
       if (body.vendor !== undefined) {
         vendor = String(body.vendor || '').trim();
       }
@@ -125,6 +139,8 @@ export async function POST(
       productFeatures,
       categoryId: categoryId || undefined,
       collectionIds,
+      cardGroup: cardGroup || undefined,
+      showInEssential,
       vendor: vendor || undefined,
       productType: productType || undefined,
       tags: tags || undefined,

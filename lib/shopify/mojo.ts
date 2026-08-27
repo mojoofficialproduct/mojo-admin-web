@@ -225,6 +225,25 @@ export async function generateUniqueSku(title = '', colorName = '', preferredSku
   return `${generateAutoSku(title, colorName)}-${Date.now().toString().slice(-4)}`;
 }
 
+export function detectMojoCardGroup(title = '', modelTitle = '', fallbackGroupId = ''): string {
+  const cleanTitle = String(title || '').trim();
+  const lower = cleanTitle.toLowerCase();
+  
+  if (lower.includes('zebra')) {
+    return 'ZEBRA';
+  }
+  if (lower.endsWith('hsr') || lower.includes('- hsr') || lower.includes(' hsr') || lower.endsWith(' hsr') || lower.includes('-hsr')) {
+    return 'HSR';
+  }
+  if (lower.endsWith('rg') || lower.includes('- rg') || lower.includes(' rg') || lower.endsWith(' rg') || lower.includes('-rg')) {
+    return 'RG';
+  }
+  if (lower.endsWith('dr') || lower.includes('- dr') || lower.includes(' dr') || lower.endsWith(' dr') || lower.includes('-dr')) {
+    return 'DR';
+  }
+  return fallbackGroupId || slugifyTurkish(modelTitle || cleanTitle) || 'default';
+}
+
 export interface SiblingProductInput {
   id: string;
   title?: string;
@@ -232,10 +251,12 @@ export interface SiblingProductInput {
   colorName?: string;
   hex?: string;
   groupId?: string;
+  cardGroup?: string;
   customColorNameMetafield?: { value?: string };
   customSwatchColorMetafield?: { value?: string };
   customModelTitleMetafield?: { value?: string };
   customGroupIdMetafield?: { value?: string };
+  customCardGroupMetafield?: { value?: string };
 }
 
 /**
@@ -244,7 +265,7 @@ export interface SiblingProductInput {
  */
 export async function syncSiblingColorProductReferences(
   siblingProducts: SiblingProductInput[] = [],
-  options: { modelTitle?: string; groupId?: string } = {}
+  options: { modelTitle?: string; groupId?: string; cardGroup?: string } = {}
 ) {
   if (!Array.isArray(siblingProducts) || siblingProducts.length === 0) {
     return { success: true, updatedCount: 0 };
@@ -279,6 +300,11 @@ export async function syncSiblingColorProductReferences(
     const colorHex = sibling.customSwatchColorMetafield?.value || sibling.hex || getColorSwatch(colorName);
     const modelTitle = options.modelTitle || sibling.customModelTitleMetafield?.value || parsed.modelTitle || sibling.title || '';
     const groupId = options.groupId || sibling.customGroupIdMetafield?.value || sibling.groupId || slugifyTurkish(modelTitle);
+    const cardGroup =
+      sibling.customCardGroupMetafield?.value ||
+      sibling.cardGroup ||
+      options.cardGroup ||
+      detectMojoCardGroup(sibling.title || '', modelTitle, groupId);
 
     const metafields = [
       {
@@ -321,6 +347,12 @@ export async function syncSiblingColorProductReferences(
         namespace: 'custom',
         key: 'mojo_group_id',
         value: groupId,
+        type: 'single_line_text_field',
+      },
+      {
+        namespace: 'custom',
+        key: 'mojo_card_group',
+        value: cardGroup,
         type: 'single_line_text_field',
       },
     ];

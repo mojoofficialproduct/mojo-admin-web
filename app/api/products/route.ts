@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
     let seoTitle = '';
     let seoDescription = '';
     let collectionIds: string[] = [];
+    let cardGroup = '';
+    let showInEssential = true;
     const imageItems: ImageUploadItem[] = [];
 
     if (contentType.includes('multipart/form-data')) {
@@ -70,6 +72,10 @@ export async function POST(request: NextRequest) {
       status = (formData.get('status') as 'ACTIVE' | 'DRAFT') || 'ACTIVE';
       locationId = String(formData.get('locationId') || '').trim();
       categoryId = String(formData.get('categoryId') || '').trim();
+      cardGroup = String(formData.get('cardGroup') || '').trim();
+      if (formData.get('showInEssential') !== null) {
+        showInEssential = formData.get('showInEssential') !== 'false';
+      }
       vendor = String(formData.get('vendor') || 'MOJO').trim();
       productType = String(formData.get('productType') || '').trim();
       tags = String(formData.get('tags') || '').trim();
@@ -118,6 +124,8 @@ export async function POST(request: NextRequest) {
       locationId = String(body.locationId || '').trim();
       categoryId = String(body.categoryId || '').trim();
       collectionIds = Array.isArray(body.collectionIds) ? body.collectionIds : [];
+      cardGroup = String(body.cardGroup || '').trim();
+      showInEssential = body.showInEssential !== false;
       vendor = String(body.vendor || 'MOJO').trim();
       productType = String(body.productType || '').trim();
       tags = String(body.tags || '').trim();
@@ -152,6 +160,8 @@ export async function POST(request: NextRequest) {
         locationId,
         categoryId,
         collectionIds,
+        cardGroup: cardGroup || undefined,
+        showInEssential,
         vendor,
         productType,
         tags,

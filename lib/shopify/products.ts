@@ -13,6 +13,7 @@ import {
   getColorSwatch,
   generateUniqueSku,
   slugifyTurkish,
+  detectMojoCardGroup,
   syncSiblingColorProductReferences,
   SiblingProductInput,
 } from './mojo';
@@ -46,6 +47,7 @@ export interface ProductSummary {
   swatchColor?: string;
   modelTitle?: string;
   groupId?: string;
+  cardGroup?: string;
   productFeatures?: string;
   isPublished?: boolean;
   publishedChannelsCount?: number;
@@ -66,6 +68,8 @@ export interface CreateProductInput {
   locationId?: string;
   categoryId?: string;
   collectionIds?: string[];
+  cardGroup?: string;
+  showInEssential?: boolean;
   vendor?: string;
   productType?: string;
   tags?: string[] | string;
@@ -83,6 +87,8 @@ export interface UpdateProductInput {
   productFeatures?: string;
   categoryId?: string;
   collectionIds?: string[];
+  cardGroup?: string;
+  showInEssential?: boolean;
   status?: 'ACTIVE' | 'DRAFT';
   vendor?: string;
   productType?: string;
@@ -174,6 +180,7 @@ export async function fetchProductsList(options: {
             }>;
           };
           customGroupIdMetafield?: { value?: string };
+          customCardGroupMetafield?: { value?: string };
           customModelTitleMetafield?: { value?: string };
           customColorNameMetafield?: { value?: string };
           customSwatchColorMetafield?: { value?: string };
@@ -222,6 +229,7 @@ export async function fetchProductsList(options: {
       swatchColor,
       modelTitle: node.customModelTitleMetafield?.value || parsed.modelTitle,
       groupId: node.customGroupIdMetafield?.value,
+      cardGroup: node.customCardGroupMetafield?.value,
       productFeatures: node.customProductFeaturesMetafield?.value,
     };
   });
@@ -362,6 +370,7 @@ export async function createMojoProduct(
   const fullTitle = modelTitle.includes(' - ') ? modelTitle : `${modelTitle} - ${colorName}`;
   const colorHex = input.customColorHex?.trim() || getColorSwatch(colorName);
   const groupId = `grp_${Date.now()}_${slugifyTurkish(modelTitle).slice(0, 20)}`;
+  const cardGroup = input.cardGroup?.trim() || detectMojoCardGroup(fullTitle, modelTitle, groupId);
   const status = input.status || 'ACTIVE';
 
   // 1. Resolve SKU (unique, non-colliding)
@@ -373,6 +382,12 @@ export async function createMojoProduct(
       namespace: 'custom',
       key: 'mojo_group_id',
       value: groupId,
+      type: 'single_line_text_field',
+    },
+    {
+      namespace: 'custom',
+      key: 'mojo_card_group',
+      value: cardGroup,
       type: 'single_line_text_field',
     },
     {
@@ -548,10 +563,18 @@ export async function createMojoProduct(
     }
   }
 
-  // 6.5 Assign to Collections if specified
-  if (input.collectionIds && input.collectionIds.length > 0) {
+  // 6.5 Assign to Collections if specified (plus ESSENTIAL if enabled)
+  const targetCollectionIds = [...(input.collectionIds || [])];
+  if (input.showInEssential !== false) {
+    const essentialColId = 'gid://shopify/Collection/336765911211';
+    if (!targetCollectionIds.includes(essentialColId)) {
+      targetCollectionIds.push(essentialColId);
+    }
+  }
+
+  if (targetCollectionIds.length > 0) {
     try {
-      await addProductToCollections(createdProduct.id, input.collectionIds);
+      await addProductToCollections(createdProduct.id, targetCollectionIds);
     } catch (colErr) {
       console.warn('Koleksiyon atama uyarısı:', colErr);
     }
@@ -580,9 +603,10 @@ export async function createMojoProduct(
         hex: colorHex,
         templateSuffix: 'mojo-dynamic',
         groupId,
+        cardGroup,
       },
     ],
-    { modelTitle, groupId }
+    { modelTitle, groupId, cardGroup }
   );
 
   return {
@@ -611,6 +635,7 @@ export async function createMojoProduct(
       swatchColor: colorHex,
       modelTitle,
       groupId,
+      cardGroup,
       isPublished,
       publishedChannelsCount: publicationDetails?.actualCount ?? 0,
       category: createdProduct.category,
@@ -620,8 +645,8 @@ export async function createMojoProduct(
 
 export interface AddSiblingColorOptions {
   customColorHex?: string;
-  price?: string;
-  compareAtPrice?: string;
+  price?: string | number;
+  compareAtPrice?: string | number;
   quantity?: string | number;
   sku?: string;
   barcode?: string;
@@ -629,6 +654,8 @@ export interface AddSiblingColorOptions {
   productFeatures?: string;
   categoryId?: string;
   collectionIds?: string[];
+  cardGroup?: string;
+  showInEssential?: boolean;
   vendor?: string;
   productType?: string;
   tags?: string[] | string;
@@ -659,6 +686,7 @@ export async function addSiblingColorProduct(
   const modelTitle = sourceProduct.customModelTitleMetafield?.value || parsed.modelTitle || sourceProduct.title;
   const sourceGroupId =
     sourceProduct.customGroupIdMetafield?.value || `grp_${Date.now()}_${slugifyTurkish(modelTitle).slice(0, 20)}`;
+  const sourceCardGroup = sourceProduct.customCardGroupMetafield?.value;
 
   const firstVariant = sourceProduct.variants?.nodes?.[0];
   const price = options.price !== undefined && String(options.price).trim() !== '' ? options.price : firstVariant?.price || '0';
@@ -684,6 +712,9 @@ export async function addSiblingColorProduct(
   const tags = options.tags !== undefined ? options.tags : sourceProduct.tags;
   const status = options.status || 'ACTIVE';
 
+  const initialCardGroup =
+    options.cardGroup || sourceCardGroup || detectMojoCardGroup(`${modelTitle} - ${newColorName}`, modelTitle, sourceGroupId);
+
   const createResult = await createMojoProduct(
     {
       modelTitle,
@@ -699,6 +730,8 @@ export async function addSiblingColorProduct(
       status,
       categoryId,
       collectionIds: targetCollectionIds,
+      cardGroup: initialCardGroup,
+      showInEssential: options.showInEssential,
       vendor,
       productType,
       tags,
@@ -720,8 +753,15 @@ export async function addSiblingColorProduct(
   const existingSiblings: SiblingProductInput[] =
     sourceProduct.customColorProductsMetafield?.references?.nodes || [sourceProduct];
 
+  const targetCardGroup = createResult.product.cardGroup || initialCardGroup;
+
   const allSiblings: SiblingProductInput[] = [
-    ...existingSiblings.filter((s) => s.id !== createResult.product?.id),
+    ...existingSiblings
+      .filter((s) => s.id !== createResult.product?.id)
+      .map((s) => ({
+        ...s,
+        cardGroup: s.customCardGroupMetafield?.value || (s as any).cardGroup || sourceCardGroup,
+      })),
     {
       id: createResult.product.id,
       title: createResult.product.title,
@@ -729,12 +769,14 @@ export async function addSiblingColorProduct(
       hex: createResult.product.swatchColor,
       templateSuffix: 'mojo-dynamic',
       groupId: sourceGroupId,
+      cardGroup: targetCardGroup,
     },
   ];
 
   await syncSiblingColorProductReferences(allSiblings, {
     modelTitle,
     groupId: sourceGroupId,
+    cardGroup: targetCardGroup,
   });
 
   return { success: true, product: createResult.product };
@@ -833,15 +875,25 @@ export async function updateMojoProduct(
     }
     hasProductUpdates = true;
   }
+  const metafieldsToUpdate: Array<{ namespace: string; key: string; value: string; type: string }> = [];
   if (input.productFeatures !== undefined) {
-    productInput.metafields = [
-      {
-        namespace: 'custom',
-        key: 'mojo_product_features',
-        value: input.productFeatures.trim(),
-        type: 'multi_line_text_field',
-      },
-    ];
+    metafieldsToUpdate.push({
+      namespace: 'custom',
+      key: 'mojo_product_features',
+      value: input.productFeatures.trim(),
+      type: 'multi_line_text_field',
+    });
+  }
+  if (input.cardGroup !== undefined && input.cardGroup.trim()) {
+    metafieldsToUpdate.push({
+      namespace: 'custom',
+      key: 'mojo_card_group',
+      value: input.cardGroup.trim(),
+      type: 'single_line_text_field',
+    });
+  }
+  if (metafieldsToUpdate.length > 0) {
+    productInput.metafields = metafieldsToUpdate;
     hasProductUpdates = true;
   }
 
@@ -863,9 +915,17 @@ export async function updateMojoProduct(
   }
 
   // 1.5 Update Collection Memberships if provided
-  if (input.collectionIds && input.collectionIds.length > 0) {
+  const targetCollectionIds = input.collectionIds ? [...input.collectionIds] : undefined;
+  if (input.showInEssential === true && targetCollectionIds) {
+    const essentialColId = 'gid://shopify/Collection/336765911211';
+    if (!targetCollectionIds.includes(essentialColId)) {
+      targetCollectionIds.push(essentialColId);
+    }
+  }
+
+  if (targetCollectionIds && targetCollectionIds.length > 0) {
     try {
-      await addProductToCollections(fullProductId, input.collectionIds);
+      await addProductToCollections(fullProductId, targetCollectionIds);
     } catch (colErr) {
       console.warn('Koleksiyon güncelleme uyarısı:', colErr);
     }

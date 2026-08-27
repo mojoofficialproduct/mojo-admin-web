@@ -56,6 +56,9 @@ export const PRODUCTS_QUERY = /* GraphQL */ `
           customGroupIdMetafield: metafield(namespace: "custom", key: "mojo_group_id") {
             value
           }
+          customCardGroupMetafield: metafield(namespace: "custom", key: "mojo_card_group") {
+            value
+          }
           customModelTitleMetafield: metafield(namespace: "custom", key: "mojo_model_title") {
             value
           }
@@ -162,6 +165,10 @@ export const GET_PRODUCT_QUERY = /* GraphQL */ `
         id
         value
       }
+      customCardGroupMetafield: metafield(namespace: "custom", key: "mojo_card_group") {
+        id
+        value
+      }
       customModelTitleMetafield: metafield(namespace: "custom", key: "mojo_model_title") {
         id
         value
@@ -211,6 +218,9 @@ export const GET_PRODUCT_QUERY = /* GraphQL */ `
                 value
               }
               customSwatchColorMetafield: metafield(namespace: "custom", key: "mojo_swatch_color") {
+                value
+              }
+              customCardGroupMetafield: metafield(namespace: "custom", key: "mojo_card_group") {
                 value
               }
             }
