@@ -107,9 +107,14 @@ export default function ProductDetailPage({
   const [colorTags, setColorTags] = useState('çanta, kadın');
   const [colorWeight, setColorWeight] = useState('');
   const [colorStatus, setColorStatus] = useState<'ACTIVE' | 'DRAFT'>('ACTIVE');
-  const [colorHomepageVisible, setColorHomepageVisible] = useState(true);
+  const [colorHomepageVisible, setColorHomepageVisible] = useState(false);
   const [colorImages, setColorImages] = useState<LocalImageItem[]>([]);
   const [isCreatingColor, setIsCreatingColor] = useState(false);
+
+  // Family Curation Matrix State
+  const [familyCurationMap, setFamilyCurationMap] = useState<Record<string, boolean>>({});
+  const [isSavingCuration, setIsSavingCuration] = useState(false);
+  const [curationFeedback, setCurationFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const loadProduct = useCallback(async () => {
     try {
@@ -145,7 +150,7 @@ export default function ProductDetailPage({
       const initialStatus = (p?.status as 'ACTIVE' | 'DRAFT') || 'ACTIVE';
       const initialTags = p?.tags ? (Array.isArray(p.tags) ? p.tags.join(', ') : String(p.tags)) : '';
       const initialFeatures = p?.customProductFeaturesMetafield?.value || '';
-      const initialHomepageVisible = p?.customHomepageVisibleMetafield?.value !== 'false';
+      const initialHomepageVisible = p?.customHomepageVisibleMetafield?.value === 'true';
 
       setEditTitle(initialTitle);
       setEditDescription(initialDesc);
@@ -160,6 +165,17 @@ export default function ProductDetailPage({
       setEditStatus(initialStatus);
       setEditTags(initialTags);
       setEditHomepageVisible(initialHomepageVisible);
+
+      // Populate Family Curation Map
+      const curMap: Record<string, boolean> = {};
+      const allFamilyMembers = p?.customColorProductsMetafield?.references?.nodes || (p ? [p] : []);
+      for (const fm of allFamilyMembers) {
+        curMap[fm.id] = fm.customHomepageVisibleMetafield?.value === 'true' || fm.homepageVisible === true;
+      }
+      if (p?.id && curMap[p.id] === undefined) {
+        curMap[p.id] = initialHomepageVisible;
+      }
+      setFamilyCurationMap(curMap);
 
       setInitialEditValues({
         title: initialTitle,
@@ -314,15 +330,74 @@ export default function ProductDetailPage({
       setColorBarcode('');
       setColorWeight('');
       setColorStatus('ACTIVE');
-
-      const siblingNodes = product.customColorProductsMetafield?.references?.nodes || [product];
-      const activeCount = siblingNodes.filter(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (s: any) => s.customHomepageVisibleMetafield?.value === 'true'
-      ).length;
-      setColorHomepageVisible(activeCount < 5);
+      setColorHomepageVisible(false);
     }
     setIsColorModalOpen(true);
+  };
+
+  const handleToggleCuration = (productId: string) => {
+    setCurationFeedback(null);
+    const currentlyChecked = Boolean(familyCurationMap[productId]);
+    if (!currentlyChecked) {
+      const currentSelectedCount = Object.values(familyCurationMap).filter(Boolean).length;
+      if (currentSelectedCount >= 5) {
+        setCurationFeedback({
+          type: 'error',
+          message: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
+        });
+        return;
+      }
+    }
+    setFamilyCurationMap((prev) => ({
+      ...prev,
+      [productId]: !currentlyChecked,
+    }));
+  };
+
+  const handleSaveFamilyCuration = async () => {
+    try {
+      setIsSavingCuration(true);
+      setCurationFeedback(null);
+
+      const selectedCount = Object.values(familyCurationMap).filter(Boolean).length;
+      if (selectedCount > 5) {
+        setCurationFeedback({
+          type: 'error',
+          message: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
+        });
+        return;
+      }
+
+      const groupId = product?.customGroupIdMetafield?.value || '';
+      const selections = Object.entries(familyCurationMap).map(([pid, visible]) => ({
+        productId: pid,
+        homepageVisible: visible,
+      }));
+
+      const res = await fetch(`/api/products/${resolvedParams.id}/family-curation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId, selections }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Vitrin ayarları kaydedilemedi.');
+      }
+
+      setCurationFeedback({
+        type: 'success',
+        message: `Ana sayfa vitrin seçimleri kaydedildi (${selectedCount} / 5 renk seçili).`,
+      });
+      await loadProduct();
+    } catch (err) {
+      setCurationFeedback({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Kaydedilirken hata oluştu.',
+      });
+    } finally {
+      setIsSavingCuration(false);
+    }
   };
 
   const handleCreateSiblingColor = async (e: React.FormEvent) => {
@@ -1045,6 +1120,173 @@ export default function ProductDetailPage({
             </div>
           );
         })()}
+
+        {/* ANA SAYFA VİTRİN SEÇİMİ (FAMILY CURATION MATRIX) */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h2 className="heading-md" style={{ margin: 0 }}>Ana Sayfa Vitrin Seçimi</h2>
+                {(() => {
+                  const selectedCount = Object.values(familyCurationMap).filter(Boolean).length;
+                  return (
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        padding: '3px 10px',
+                        borderRadius: 12,
+                        backgroundColor: selectedCount <= 5 ? '#ECFDF5' : '#FEF2F2',
+                        color: selectedCount <= 5 ? '#065F46' : '#991B1B',
+                        border: selectedCount <= 5 ? '1px solid #A7F3D0' : '1px solid #FECACA',
+                      }}
+                    >
+                      Seçim: {selectedCount} / 5
+                    </span>
+                  );
+                })()}
+              </div>
+              <p className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
+                PDP&apos;de bu modelin {siblingProducts.length > 0 ? siblingProducts.length : 1} renginin tamamı görünür. Ana sayfada yalnız işaretlediğiniz renkler listelenir (Maksimum 5 renk).
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSaveFamilyCuration}
+              disabled={isSavingCuration}
+              className="btn btn-primary"
+              style={{ gap: 8, fontWeight: 700 }}
+            >
+              {isSavingCuration ? (
+                <>
+                  <Loader2 size={16} className="spinner" />
+                  <span>Kaydediliyor...</span>
+                </>
+              ) : (
+                <>
+                  <Check size={16} />
+                  <span>Vitrin Seçimini Kaydet</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {curationFeedback && (
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: 13,
+                fontWeight: 600,
+                backgroundColor: curationFeedback.type === 'success' ? '#ECFDF5' : '#FEF2F2',
+                color: curationFeedback.type === 'success' ? '#065F46' : '#991B1B',
+                border: curationFeedback.type === 'success' ? '1px solid #A7F3D0' : '1px solid #FECACA',
+              }}
+            >
+              {curationFeedback.message}
+            </div>
+          )}
+
+          {/* Family Sibling Curation Matrix List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+            {(siblingProducts.length > 0 ? siblingProducts : [product]).map((sibling: any) => {
+              const sColor = sibling.customColorNameMetafield?.value || parseMojoProductTitle(sibling.title).colorName || 'Renk';
+              const sHex = sibling.customSwatchColorMetafield?.value || getColorSwatch(sColor);
+              const isChecked = Boolean(familyCurationMap[sibling.id]);
+              const hasImage = Boolean(sibling.featuredImage?.url);
+              const isCurrent = sibling.id === product.id;
+
+              return (
+                <div
+                  key={sibling.id}
+                  onClick={() => handleToggleCuration(sibling.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 16px',
+                    backgroundColor: isChecked ? '#F9FAFB' : '#FFFFFF',
+                    borderBottom: '1px solid #F3F4F6',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.15s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {}} // Controlled via row click
+                      style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#E60012' }}
+                    />
+                    
+                    <div
+                      style={{
+                        width: 36,
+                        height: 45,
+                        borderRadius: 4,
+                        overflow: 'hidden',
+                        backgroundColor: '#F3F4F6',
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {hasImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={sibling.featuredImage.url}
+                          alt={sibling.title}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <ImageOff size={14} color="#9CA3AF" />
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span
+                          style={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: '50%',
+                            backgroundColor: sHex,
+                            border: '1px solid rgba(0,0,0,0.15)',
+                          }}
+                        />
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>
+                          {sColor}
+                        </span>
+                        {isCurrent && (
+                          <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 500 }}>
+                            (Bu Ürün)
+                          </span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: 12, color: '#6B7280' }}>
+                        {sibling.title}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {isChecked ? (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#059669', backgroundColor: '#ECFDF5', padding: '3px 8px', borderRadius: 6 }}>
+                        ✓ Ana Sayfada Gösteriliyor
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: '#9CA3AF', backgroundColor: '#F3F4F6', padding: '3px 8px', borderRadius: 6 }}>
+                        Ana Sayfada Gizli
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Product Media Gallery */}
         {product.media?.nodes && product.media.nodes.length > 0 && (

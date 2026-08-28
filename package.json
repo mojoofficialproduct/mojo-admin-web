@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/mojo-architecture.test.mjs"
+    "test": "tsx --test tests/*.test.mjs"
   },
   "dependencies": {
     "jose": "^6.2.10",

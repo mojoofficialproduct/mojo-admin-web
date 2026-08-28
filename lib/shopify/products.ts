@@ -430,7 +430,7 @@ export async function createMojoProduct(
     });
   }
 
-  const homepageVisible = input.homepageVisible !== undefined ? input.homepageVisible : true;
+  const homepageVisible = input.homepageVisible !== undefined ? input.homepageVisible : false;
   if (homepageVisible === true && groupId) {
     try {
       const allProds = await fetchProductsList({ first: 50 });
@@ -727,10 +727,8 @@ export async function addSiblingColorProduct(
     (s: any) => s.customHomepageVisibleMetafield?.value === 'true' || s.homepageVisible === true
   ).length;
 
-  let targetHomepageVisible = options.homepageVisible;
-  if (targetHomepageVisible === undefined) {
-    targetHomepageVisible = visibleSiblingsCount < 5;
-  } else if (targetHomepageVisible === true && visibleSiblingsCount >= 5) {
+  const targetHomepageVisible = options.homepageVisible === true;
+  if (targetHomepageVisible && visibleSiblingsCount >= 5) {
     return {
       success: false,
       error: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
@@ -1075,4 +1073,88 @@ export async function updateMojoProduct(
   }
 
   return { success: true };
+}
+
+export interface FamilyCurationSelection {
+  productId: string;
+  homepageVisible: boolean;
+}
+
+/**
+ * Bulk updates homepage visibility (custom.mojo_homepage_visible) for an entire product family group.
+ * Performs atomic validation ensuring no more than 5 products in a family can be set to true.
+ */
+export async function updateFamilyHomepageCuration(
+  groupId: string,
+  selections: FamilyCurationSelection[]
+): Promise<{ success: boolean; updatedCount?: number; error?: string }> {
+  if (!groupId || typeof groupId !== 'string') {
+    return { success: false, error: 'Geçersiz ürün grubu kimliği (groupId).' };
+  }
+
+  if (!Array.isArray(selections)) {
+    return { success: false, error: 'Geçersiz seçim listesi.' };
+  }
+
+  // 1. Atomic Validation: En fazla 5 ürün seçilebilir
+  const trueCount = selections.filter((s) => s.homepageVisible === true).length;
+  if (trueCount > 5) {
+    return {
+      success: false,
+      error: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
+    };
+  }
+
+  // 2. Security validation: Verify all product IDs belong to this family group
+  const allProdsResult = await fetchProductsList({ first: 100 });
+  const familyProducts = allProdsResult.products.filter((p) => p.groupId === groupId);
+  const familyGids = new Set(
+    familyProducts.map((p) => (p.id.startsWith('gid://') ? p.id : `gid://shopify/Product/${p.id}`))
+  );
+
+  for (const sel of selections) {
+    const fullPid = sel.productId.startsWith('gid://') ? sel.productId : `gid://shopify/Product/${sel.productId}`;
+    if (!familyGids.has(fullPid)) {
+      return {
+        success: false,
+        error: `Seçilen ürün (${sel.productId}) bu ürün ailesine ait değil.`,
+      };
+    }
+  }
+
+  // 3. Apply metafield updates atomically
+  for (const sel of selections) {
+    const fullPid = sel.productId.startsWith('gid://') ? sel.productId : `gid://shopify/Product/${sel.productId}`;
+    const res = await executeShopifyGraphQL<{
+      productUpdate: {
+        product?: { id: string };
+        userErrors?: Array<{ field: string[]; message: string }>;
+      };
+    }>(PRODUCT_UPDATE_MUTATION, {
+      variables: {
+        product: {
+          id: fullPid,
+          metafields: [
+            {
+              namespace: 'custom',
+              key: 'mojo_homepage_visible',
+              value: sel.homepageVisible ? 'true' : 'false',
+              type: 'boolean',
+            },
+          ],
+        },
+      },
+      label: 'Family homepage curation update',
+    });
+
+    const userErrors = res?.productUpdate?.userErrors || [];
+    if (userErrors.length > 0) {
+      return {
+        success: false,
+        error: normalizeGraphQLError({ userErrors }, 'Vitrin güncellemesi başarısız oldu.'),
+      };
+    }
+  }
+
+  return { success: true, updatedCount: selections.length };
 }

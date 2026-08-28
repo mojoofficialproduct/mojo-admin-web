@@ -90,8 +90,8 @@ export function ProductForm() {
   // Card Subgroup & Essential & Homepage settings
   const [cardGroupPreset, setCardGroupPreset] = useState<'AUTO' | 'HSR' | 'RG' | 'DR' | 'ZEBRA' | 'CUSTOM'>('AUTO');
   const [customCardGroup, setCustomCardGroup] = useState('');
-  const [showInEssential, setShowInEssential] = useState(true);
-  const [homepageVisible, setHomepageVisible] = useState(true);
+  const [showInEssential, setShowInEssential] = useState(false);
+  const [homepageVisible, setHomepageVisible] = useState(false);
 
   // Accordion Toggles
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);

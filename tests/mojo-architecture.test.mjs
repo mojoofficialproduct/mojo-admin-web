@@ -1065,72 +1065,13 @@ test('Homepage Curated Max-5: addSiblingColorProduct defaults to true when count
     const resA = await addSiblingColorProduct('gid://shopify/Product/1', 'Kırmızı');
     assert.equal(resA.success, true);
     const visMetaA = createdSiblingPayload.metafields?.find((m) => m.key === 'mojo_homepage_visible');
-    assert.equal(visMetaA?.value, 'true', 'Sibling should default to true when family count is 3');
+    assert.equal(visMetaA?.value, 'false', 'Sibling should default to false in manual curation');
 
-    // Case B: 5 existing visible -> new sibling defaults to false
-    globalThis.fetch = async (url, init) => {
-      const bodyStr = String(init?.body || '');
-      if (bodyStr.includes('GetProduct') || bodyStr.includes('product(')) {
-        return {
-          ok: true,
-          json: async () => ({
-            data: {
-              product: {
-                id: 'gid://shopify/Product/1',
-                title: 'Family Bag - Siyah',
-                customGroupIdMetafield: { value: 'grp_bag' },
-                customColorProductsMetafield: {
-                  references: {
-                    nodes: [
-                      { id: 'gid://shopify/Product/1', customHomepageVisibleMetafield: { value: 'true' } },
-                      { id: 'gid://shopify/Product/2', customHomepageVisibleMetafield: { value: 'true' } },
-                      { id: 'gid://shopify/Product/3', customHomepageVisibleMetafield: { value: 'true' } },
-                      { id: 'gid://shopify/Product/4', customHomepageVisibleMetafield: { value: 'true' } },
-                      { id: 'gid://shopify/Product/5', customHomepageVisibleMetafield: { value: 'true' } },
-                    ],
-                  },
-                },
-              },
-            },
-          }),
-        };
-      }
-      if (bodyStr.includes('ProductCreate') || bodyStr.includes('productCreate')) {
-        const parsed = JSON.parse(bodyStr);
-        createdSiblingPayload = parsed.variables?.product;
-        return {
-          ok: true,
-          json: async () => ({
-            data: {
-              productCreate: {
-                product: {
-                  id: 'gid://shopify/Product/6',
-                  title: createdSiblingPayload.title,
-                  handle: 'family-bag-yesil',
-                  status: 'ACTIVE',
-                  variants: { nodes: [{ id: 'gid://shopify/ProductVariant/6' }] },
-                },
-                userErrors: [],
-              },
-            },
-          }),
-        };
-      }
-      return {
-        ok: true,
-        json: async () => ({
-          data: {
-            productVariantsBulkUpdate: { userErrors: [] },
-            productUpdate: { product: { id: 'gid://shopify/Product/1' }, userErrors: [] },
-          },
-        }),
-      };
-    };
-
-    const resB = await addSiblingColorProduct('gid://shopify/Product/1', 'Yeşil');
+    // Case B: Explicit true works
+    const resB = await addSiblingColorProduct('gid://shopify/Product/1', 'Yeşil', { homepageVisible: true });
     assert.equal(resB.success, true);
     const visMetaB = createdSiblingPayload.metafields?.find((m) => m.key === 'mojo_homepage_visible');
-    assert.equal(visMetaB?.value, 'false', 'Sibling should default to false when family count is 5');
+    assert.equal(visMetaB?.value, 'true', 'Sibling should be true when explicitly passed as true');
   } finally {
     globalThis.fetch = originalFetch;
   }

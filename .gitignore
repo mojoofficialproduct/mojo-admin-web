@@ -39,3 +39,8 @@
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local tools & backups
+scripts/
+yedekler/
+
