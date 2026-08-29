@@ -431,22 +431,6 @@ export async function createMojoProduct(
   }
 
   const homepageVisible = input.homepageVisible !== undefined ? input.homepageVisible : false;
-  if (homepageVisible === true && groupId) {
-    try {
-      const allProds = await fetchProductsList({ first: 50 });
-      const existingInGroup = allProds.products.filter(
-        (p) => p.groupId === groupId && p.homepageVisible === true
-      );
-      if (existingInGroup.length >= 5) {
-        return {
-          success: false,
-          error: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
-        };
-      }
-    } catch (e) {
-      console.warn('Family homepage count validation notice:', e);
-    }
-  }
 
   metafields.push({
     namespace: 'custom',
@@ -722,18 +706,7 @@ export async function addSiblingColorProduct(
   const existingSiblings: SiblingProductInput[] =
     sourceProduct.customColorProductsMetafield?.references?.nodes || [sourceProduct];
 
-  const visibleSiblingsCount = existingSiblings.filter(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (s: any) => s.customHomepageVisibleMetafield?.value === 'true' || s.homepageVisible === true
-  ).length;
-
   const targetHomepageVisible = options.homepageVisible === true;
-  if (targetHomepageVisible && visibleSiblingsCount >= 5) {
-    return {
-      success: false,
-      error: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
-    };
-  }
 
   const firstVariant = sourceProduct.variants?.nodes?.[0];
   const price = options.price !== undefined && String(options.price).trim() !== '' ? options.price : firstVariant?.price || '0';
@@ -938,29 +911,6 @@ export async function updateMojoProduct(
     });
   }
   if (input.homepageVisible !== undefined) {
-    if (input.homepageVisible === true) {
-      try {
-        const currentProduct = await fetchProductById(productId);
-        const siblings: Array<{ id: string; customHomepageVisibleMetafield?: { value?: string } }> =
-          currentProduct?.customColorProductsMetafield?.references?.nodes || [currentProduct];
-
-        const otherVisibleCount = siblings.filter((s) => {
-          const sId = String(s.id).startsWith('gid://') ? s.id : `gid://shopify/Product/${s.id}`;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return sId !== fullProductId && (s.customHomepageVisibleMetafield?.value === 'true' || (s as any).customHomepageVisibleMetafield?.value === true);
-        }).length;
-
-        if (otherVisibleCount >= 5) {
-          return {
-            success: false,
-            error: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
-          };
-        }
-      } catch (err) {
-        console.warn('Update homepage count validation notice:', err);
-      }
-    }
-
     metafieldsToUpdate.push({
       namespace: 'custom',
       key: 'mojo_homepage_visible',
@@ -1082,7 +1032,7 @@ export interface FamilyCurationSelection {
 
 /**
  * Bulk updates homepage visibility (custom.mojo_homepage_visible) for an entire product family group.
- * Performs atomic validation ensuring no more than 5 products in a family can be set to true.
+ * Validates family group ownership and atomically applies homepage visibility metafields.
  */
 export async function updateFamilyHomepageCuration(
   groupId: string,
@@ -1094,15 +1044,6 @@ export async function updateFamilyHomepageCuration(
 
   if (!Array.isArray(selections)) {
     return { success: false, error: 'Geçersiz seçim listesi.' };
-  }
-
-  // 1. Atomic Validation: En fazla 5 ürün seçilebilir
-  const trueCount = selections.filter((s) => s.homepageVisible === true).length;
-  if (trueCount > 5) {
-    return {
-      success: false,
-      error: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
-    };
   }
 
   // 2. Security validation: Verify all product IDs belong to this family group

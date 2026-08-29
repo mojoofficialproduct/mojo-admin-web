@@ -943,33 +943,21 @@ test('Homepage Curated Max-5: updateMojoProduct preserves existing value when un
   }
 });
 
-test('Homepage Curated Max-5: updateMojoProduct blocks 6th selection in same family', async () => {
+test('Homepage Curated: updateMojoProduct successfully sets homepageVisible: true without arbitrary 5-limit', async () => {
   const { updateMojoProduct } = await import('../lib/shopify/products.ts');
   const originalFetch = globalThis.fetch;
+  let updatePayload = null;
 
   globalThis.fetch = async (url, init) => {
     const bodyStr = String(init?.body || '');
-    if (bodyStr.includes('GetProduct') || bodyStr.includes('product(')) {
+    if (bodyStr.includes('ProductUpdate') || bodyStr.includes('productUpdate')) {
+      const parsed = JSON.parse(bodyStr);
+      updatePayload = parsed.variables?.product;
       return {
         ok: true,
         json: async () => ({
           data: {
-            product: {
-              id: 'gid://shopify/Product/6',
-              title: 'Family A - 6',
-              customColorProductsMetafield: {
-                references: {
-                  nodes: [
-                    { id: 'gid://shopify/Product/1', customHomepageVisibleMetafield: { value: 'true' } },
-                    { id: 'gid://shopify/Product/2', customHomepageVisibleMetafield: { value: 'true' } },
-                    { id: 'gid://shopify/Product/3', customHomepageVisibleMetafield: { value: 'true' } },
-                    { id: 'gid://shopify/Product/4', customHomepageVisibleMetafield: { value: 'true' } },
-                    { id: 'gid://shopify/Product/5', customHomepageVisibleMetafield: { value: 'true' } },
-                    { id: 'gid://shopify/Product/6', customHomepageVisibleMetafield: { value: 'false' } },
-                  ],
-                },
-              },
-            },
+            productUpdate: { product: { id: parsed.variables?.product?.id }, userErrors: [] },
           },
         }),
       };
@@ -982,8 +970,9 @@ test('Homepage Curated Max-5: updateMojoProduct blocks 6th selection in same fam
       homepageVisible: true,
     });
 
-    assert.equal(res.success, false);
-    assert.equal(res.error, 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.');
+    assert.equal(res.success, true);
+    const visMeta = updatePayload?.metafields?.find((m) => m.key === 'mojo_homepage_visible');
+    assert.equal(visMeta?.value, 'true');
   } finally {
     globalThis.fetch = originalFetch;
   }

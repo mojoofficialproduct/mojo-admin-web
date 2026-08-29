@@ -25,14 +25,6 @@ export async function POST(
       );
     }
 
-    // Atomic validation: Max 5 items can be visible on homepage
-    const trueCount = selections.filter((s) => s.homepageVisible === true).length;
-    if (trueCount > 5) {
-      return NextResponse.json(
-        { error: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.' },
-        { status: 400 }
-      );
-    }
 
     const result = await updateFamilyHomepageCuration(groupId, selections);
 

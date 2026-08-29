@@ -1083,10 +1083,10 @@ export function ProductForm() {
               />
               <label htmlFor="homepageVisibleToggle" style={{ cursor: 'pointer', fontSize: 13 }}>
                 <span style={{ fontWeight: 700, color: '#111827', display: 'block' }}>
-                  Ana Sayfada Göster (Maks 5)
+                  Ana Sayfada Göster
                 </span>
                 <span style={{ fontSize: 11, color: '#6B7280', display: 'block', marginTop: 2 }}>
-                  Bu rengin ana sayfa vitrininde listelenmesini sağlar. Aile başına en fazla 5 renk seçilebilir.
+                  Bu rengin ana sayfa vitrininde listelenmesini sağlar.
                 </span>
               </label>
             </div>

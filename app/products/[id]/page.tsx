@@ -338,16 +338,6 @@ export default function ProductDetailPage({
   const handleToggleCuration = (productId: string) => {
     setCurationFeedback(null);
     const currentlyChecked = Boolean(familyCurationMap[productId]);
-    if (!currentlyChecked) {
-      const currentSelectedCount = Object.values(familyCurationMap).filter(Boolean).length;
-      if (currentSelectedCount >= 5) {
-        setCurationFeedback({
-          type: 'error',
-          message: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
-        });
-        return;
-      }
-    }
     setFamilyCurationMap((prev) => ({
       ...prev,
       [productId]: !currentlyChecked,
@@ -360,13 +350,7 @@ export default function ProductDetailPage({
       setCurationFeedback(null);
 
       const selectedCount = Object.values(familyCurationMap).filter(Boolean).length;
-      if (selectedCount > 5) {
-        setCurationFeedback({
-          type: 'error',
-          message: 'Bu ürün ailesinde ana sayfa için en fazla 5 renk seçebilirsiniz.',
-        });
-        return;
-      }
+      const totalFamilyCount = siblingProducts.length > 0 ? siblingProducts.length : 1;
 
       const groupId = product?.customGroupIdMetafield?.value || '';
       const selections = Object.entries(familyCurationMap).map(([pid, visible]) => ({
@@ -387,7 +371,7 @@ export default function ProductDetailPage({
 
       setCurationFeedback({
         type: 'success',
-        message: `Ana sayfa vitrin seçimleri kaydedildi (${selectedCount} / 5 renk seçili).`,
+        message: `Ana sayfa vitrin seçimleri kaydedildi (${selectedCount} / ${totalFamilyCount} renk seçili).`,
       });
       await loadProduct();
     } catch (err) {
@@ -804,10 +788,10 @@ export default function ProductDetailPage({
                 />
                 <label htmlFor="editHomepageVisibleToggle" style={{ cursor: 'pointer', fontSize: 13 }}>
                   <span style={{ fontWeight: 700, color: '#111827', display: 'block' }}>
-                    Ana Sayfada Göster (Maks 5 Renk)
+                    Ana Sayfada Göster
                   </span>
                   <span style={{ fontSize: 11, color: '#6B7280', display: 'block', marginTop: 2 }}>
-                    Bu ürünün ana sayfa vitrininde kart olarak listelenmesini sağlar. Ürün ailesinde en fazla 5 renk seçilebilir.
+                    Bu ürünün ana sayfa vitrininde kart olarak listelenmesini sağlar.
                   </span>
                 </label>
               </div>
@@ -982,16 +966,16 @@ export default function ProductDetailPage({
                         fontWeight: 700,
                         padding: '3px 8px',
                         borderRadius: 12,
-                        backgroundColor: visibleSiblingsCount <= 5 ? '#ECFDF5' : '#FEF2F2',
-                        color: visibleSiblingsCount <= 5 ? '#065F46' : '#991B1B',
-                        border: visibleSiblingsCount <= 5 ? '1px solid #A7F3D0' : '1px solid #FECACA',
+                        backgroundColor: '#ECFDF5',
+                        color: '#065F46',
+                        border: '1px solid #A7F3D0',
                       }}
                     >
-                      Ana Sayfa Seçimi: {visibleSiblingsCount} / 5
+                      Ana Sayfa Seçimi: {visibleSiblingsCount} / {siblingProducts.length > 0 ? siblingProducts.length : 1}
                     </span>
                   </div>
                   <p className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-                    Mağazada aynı modelin diğer renk alternatifleri olarak gösterilen bağlı ürünler. PDP&apos;de tümü görünür, ana sayfada seçilen en fazla 5 renk listelenir.
+                    Mağazada aynı modelin diğer renk alternatifleri olarak gösterilen bağlı ürünler. PDP&apos;de tümü görünür, ana sayfada vitrin için seçtiğiniz renkler listelenir.
                   </p>
                 </div>
 
@@ -1129,6 +1113,7 @@ export default function ProductDetailPage({
                 <h2 className="heading-md" style={{ margin: 0 }}>Ana Sayfa Vitrin Seçimi</h2>
                 {(() => {
                   const selectedCount = Object.values(familyCurationMap).filter(Boolean).length;
+                  const totalCount = siblingProducts.length > 0 ? siblingProducts.length : 1;
                   return (
                     <span
                       style={{
@@ -1136,18 +1121,18 @@ export default function ProductDetailPage({
                         fontWeight: 700,
                         padding: '3px 10px',
                         borderRadius: 12,
-                        backgroundColor: selectedCount <= 5 ? '#ECFDF5' : '#FEF2F2',
-                        color: selectedCount <= 5 ? '#065F46' : '#991B1B',
-                        border: selectedCount <= 5 ? '1px solid #A7F3D0' : '1px solid #FECACA',
+                        backgroundColor: '#ECFDF5',
+                        color: '#065F46',
+                        border: '1px solid #A7F3D0',
                       }}
                     >
-                      Seçim: {selectedCount} / 5
+                      Seçili: {selectedCount} / {totalCount}
                     </span>
                   );
                 })()}
               </div>
               <p className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>
-                PDP&apos;de bu modelin {siblingProducts.length > 0 ? siblingProducts.length : 1} renginin tamamı görünür. Ana sayfada yalnız işaretlediğiniz renkler listelenir (Maksimum 5 renk).
+                PDP&apos;de bu modelin {siblingProducts.length > 0 ? siblingProducts.length : 1} renginin tamamı görünür. Ana sayfada yalnız işaretlediğiniz renkler listelenir.
               </p>
             </div>
 
@@ -1689,10 +1674,10 @@ export default function ProductDetailPage({
                 />
                 <label htmlFor="colorHomepageVisibleToggle" style={{ cursor: 'pointer', fontSize: 13 }}>
                   <span style={{ fontWeight: 700, color: '#111827', display: 'block' }}>
-                    Ana Sayfada Göster (Maks 5)
+                    Ana Sayfada Göster
                   </span>
                   <span style={{ fontSize: 11, color: '#6B7280', display: 'block', marginTop: 2 }}>
-                    Bu kardeş rengin ana sayfa vitrininde listelenmesini sağlar. Ailede en fazla 5 renk seçilebilir.
+                    Bu kardeş rengin ana sayfa vitrininde listelenmesini sağlar.
                   </span>
                 </label>
               </div>

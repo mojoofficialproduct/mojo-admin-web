@@ -226,19 +226,52 @@ test('4. Family Curation: 5 selected -> PASS', async () => {
   }
 });
 
-test('5. Family Curation: 6 selected -> REJECT (Atomic validation)', async () => {
+test('5. Family Curation: 6 and 18 selected -> PASS (No max-5 limit)', async () => {
   setupMockEnv();
-  const selections = [
-    { productId: 'gid://shopify/Product/1', homepageVisible: true },
-    { productId: 'gid://shopify/Product/2', homepageVisible: true },
-    { productId: 'gid://shopify/Product/3', homepageVisible: true },
-    { productId: 'gid://shopify/Product/4', homepageVisible: true },
-    { productId: 'gid://shopify/Product/5', homepageVisible: true },
-    { productId: 'gid://shopify/Product/6', homepageVisible: true },
-  ];
-  const res = await updateFamilyHomepageCuration('grp_test', selections);
-  assert.equal(res.success, false);
-  assert.match(res.error || '', /en fazla 5 renk/);
+  const originalFetch = globalThis.fetch;
+  const edges = Array.from({ length: 18 }, (_, i) => ({
+    node: {
+      id: `gid://shopify/Product/${i + 1}`,
+      title: `Bag - ${i + 1}`,
+      customGroupIdMetafield: { value: 'grp_test' },
+    }
+  }));
+
+  globalThis.fetch = createMockFetch((body) => {
+    const query = body.query || '';
+    if (query.includes('GetProductsList') || query.includes('products(')) {
+      return {
+        ok: true,
+        json: async () => ({ data: { products: { edges, pageInfo: { hasNextPage: false } } } }),
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({ data: { productUpdate: { product: { id: '1' }, userErrors: [] } } }),
+    };
+  });
+
+  try {
+    // 6 selected case
+    const selections6 = Array.from({ length: 18 }, (_, i) => ({
+      productId: `gid://shopify/Product/${i + 1}`,
+      homepageVisible: i < 6,
+    }));
+    const res6 = await updateFamilyHomepageCuration('grp_test', selections6);
+    assert.equal(res6.success, true);
+    assert.equal(res6.updatedCount, 18);
+
+    // 18 selected case (100% of family)
+    const selections18 = Array.from({ length: 18 }, (_, i) => ({
+      productId: `gid://shopify/Product/${i + 1}`,
+      homepageVisible: true,
+    }));
+    const res18 = await updateFamilyHomepageCuration('grp_test', selections18);
+    assert.equal(res18.success, true);
+    assert.equal(res18.updatedCount, 18);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('6. Family Curation: Another-family product ID payload -> REJECT', async () => {
